@@ -3,15 +3,15 @@ import com.DatFile;
 import com.SevenZip;
 import com.Worker;
 import djNode.BaseApp;
+import djNode.Terminal;
 import djNode.task.CJob;
 import djNode.task.CTask;
-import djNode.task.CTestTask;
 import djNode.tools.FileTool;
 import djNode.tools.LOG;
 import djNode.utils.Print2;
-import haxe.Timer;
-import js.Error;
+import djNode.utils.ProgressBar;
 import js.node.Fs;
+import js.node.Os;
 import js.node.Path;
 
 
@@ -37,6 +37,7 @@ class Engine
 	// Line length
 	static final LINE = 45;
 	
+		
 	//====================================================;
 	
 	// Temp folder for all operations. Set with setTempFolder()
@@ -59,6 +60,10 @@ class Engine
 	// Current active <Action>
 	public static var P_ACTION(default, null):EngineAction;
 	
+	// Number of parallel workers
+	// #SET DIRECTLY
+	public static var P_PARALLEL:Int = 2;
+	
 	// TRUE: Condense/Prioritize the Countries. Uses vars in (COUNTRY_AR)
 	public static var FLAG_FIX_COUNTRY:Bool;
 	
@@ -76,47 +81,46 @@ class Engine
 	
 	//====================================================;
 	
+	// Compiled Parameter Objects
+	// Custom Priority Countries Array, Set in P_SET()
+	static var COUNTRY_AR:Array<String> = null;
+	
+	// Compiled Compression Array, Set in P_SET()
+	static var COMPRESSION:Array<String> = null;
+	
+	// Helper
+	static var isInited:Bool = false;
 	
 	// Log file path, if -log is set
 	static var log_file:String;
 	
+	// Info, extensions that were scanned
 	static var info_scanExt = '';
 	
 	// Dat object
 	static var DAT:DatFile = null;
 	
-	// The rom files on the source folder
-	static var files:Array<String>;
-	
-	// Current operation statistics
-	static var filesTotal:Int;
-	static var filesMatched:Int;
-	static var filesUnmatched:Array<String> = null;
-	
-	// Custom Priority Countries Array | Default [EUROPE,USA]
-	// Set with pset_country_fix()
-	static var COUNTRY_AR:Array<String> = null;
-	
-	// Compiled Compression Array
-	static var COMPRESSION:Array<String> = null;
-	// Helper
-	static var isInited:Bool = false;
-	
+	// Terminal Printer
+	public static var P:Print2;
+
 	// For every game that was verified/built, keep its CRC
 	static var prCRC:Map<String,Bool>;
+	
+	// The rom files on the source folder
+	static var arFiles:Array<String>;
+	
+	// Hold files that were unmatched
+	static var arUnmatch:Array<String>;
 	
 	// List of DUPLICATE ROMS, ( just info text , not proper filenames )
 	static var arDups:Array<String>;
 	
-	// List of roms that were BUILT/CREATED in target (src filenames)
-	static var arDone:Array<String>;
+	// List of roms that were BUILT/CREATED in target
+	static var arBuilt:Array<String>;
 	
-	// List of roms that had error when reading (archives mostly)
+	// List of roms that had error when reading (log use mostly)
 	static var arFailRead:Array<String>;
-	
-	// Terminal Printer
-	public static var P:Print2;
-	
+
 	//====================================================;
 	
 	/**
@@ -230,43 +234,75 @@ class Engine
 	{
 		// Extensions to search for Files
 		var exts = ARCHIVE_EXT.copy(); exts.push(DAT.EXT);
-		files = FileTool.getFileListFromDirR(P_SOURCE, exts);
+		arFiles = FileTool.getFileListFromDirR(P_SOURCE, exts);
 		info_scanExt = exts.join(' ');
 		
 		// Init statistics info
-		filesMatched = 0;
-		filesTotal = files.length;
-		filesUnmatched = [];
 		prCRC = [];
 		arDups = [];
-		arDone = [];
+		arBuilt = [];
 		arFailRead = [];
+		arUnmatch = [];
 		
-		// Print infos
-		print_pre();
+		var T = BaseApp.TERMINAL;
 		
 		// --
 		var j = new CJob("Process Roms : " + P_ACTION);
 		
-		j.MAX_CONCURRENT = 1; // Currently just one.
-		j.FLAG_LOG_TASKS = false;
+		if (P_PARALLEL < 1) P_PARALLEL = 1;
+		j.MAX_CONCURRENT = P_PARALLEL; 
+	
+		if (j.MAX_CONCURRENT > Os.cpus().length)
+		{
+			j.MAX_CONCURRENT = Os.cpus().length;
+		}
 		
-		var c = 0;// Counter
+		j.FLAG_LOG_TASKS = true;
 		
-			j.addTaskGen(()->{
-				#if debug
-				//if (c == 15) return null;
-				#end
-				var f = files.pop();
-				if (f == null) return null;
-				return new CTask(Path.basename(f), (t)->{
-					var w = new Worker(f,++c);
-						t.syncWith(w);
-						w.start();
-				});
-			});
+		// Count to all files
+		var c = 0;
+		
+		j.addTaskGen(()->{
 			
-		j.onComplete = ()->{	
+			#if debug
+			//if (c == 15) return null;
+			#end
+			
+			var f = arFiles[c];
+			if (f == null) return null;
+			c++;
+			return new CTask(Path.basename(f), (t)->{
+				var w = new Worker(f,c);
+					t.syncWith(w);
+					w.start();
+			});
+		});
+		
+		// --
+		
+		var progress:Int = 0;
+		var _r = 1 / arFiles.length;
+		
+		j.events.on('taskStatus', (a, t)->{
+			
+			//if (a == CTaskStatus.start)
+			//{
+				//print('Start $t');
+			//}
+			
+			if (a == CTaskStatus.complete)
+			{
+				//print('Complete $t');
+				progress = Math.round((c * _r) * 100);
+				T.restorePos(); T.clearLine();
+				T.fg('yellow').printf('> ($c / ${arFiles.length}) : ').resetFg();
+				ProgressBar.print(50, progress);
+			}
+			
+		});
+
+		j.onComplete = ()->{
+			//T.restorePos().clearLine();
 			print_post();
 			if (j.ERROR == null)
 			{
@@ -280,8 +316,13 @@ class Engine
 			return; // needed for some reason, else wont compile
 		};
 		
-		j.start();
+		// -- Start Printing to Terminal
+		print_pre();
+		T.pageDown(3); // for savepos to work on windows CMD it needs space
+		T.savePos();
+		// --
 		
+		j.start();
 	}//---------------------------------------------------;
 	
 	
@@ -331,7 +372,7 @@ class Engine
 		
 		print(' Scanning Extensions : [|1| $info_scanExt |]', true);
 		
-		print(StringTools.lpad("", '-', LINE), true);
+		// print(StringTools.lpad("", '-', LINE), true);
 	}//---------------------------------------------------;
 	
 	
@@ -343,8 +384,7 @@ class Engine
 	{
 		print(StringTools.lpad("", '-', LINE), true);
 		print('Dat File Total Entries : |4|${DAT.count}|', true);
-		print('Files found in Input Dir : |1|${filesTotal}|', true);
-		print('Files matched to an entry : |2|${filesMatched}|', true);	/// DELETE?
+		print('Files found in Input Dir : |1|${arFiles.length}|', true);
 		
 		var v = switch(P_ACTION) {
 			case BUILD:  "Built into Target";
@@ -352,7 +392,7 @@ class Engine
 			default:"";
 		};
 		
-		print('$v : |4|${arDone.length}| unique files');
+		print('$v : |2|${arBuilt.length}| unique roms');
 		
 		if (arDups.length > 0)
 		{
@@ -362,10 +402,10 @@ class Engine
 			}
 		}
 		
-		if (filesUnmatched.length > 0)
+		if (arUnmatch.length > 0)
 		{
-			print('Files with No Match : |3|${filesUnmatched.length}|',true);
-			for (f in filesUnmatched) {
+			print('Files with No Match : |3|${arUnmatch.length}|',true);
+			for (f in arUnmatch) {
 				LOG.log('  $f');
 			}		
 		}
@@ -413,6 +453,26 @@ class Engine
 		return (ARCHIVE_EXT.indexOf(s) >= 0);
 	}//---------------------------------------------------;
 	
+	
+	
+	
+	/**
+	   Apply activated Name Filters to a string
+	   @return New String
+	**/
+	public static function apply_NameFilters(s:String):String
+	{
+		// Create new name based on filters (if any)
+		if(FLAG_FIX_COUNTRY)
+			s = str_prioritizeCountry(s, COUNTRY_AR);
+		if (FLAG_REMOVE_LANG){
+			s = str_noLanguage(s);
+		}
+		// Just in case, remove trailing spaces
+		s = StringTools.rtrim(s);
+		return s;
+	}//---------------------------------------------------;
+		
 	
 	
 	/**

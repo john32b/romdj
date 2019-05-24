@@ -28,7 +28,7 @@ class Main extends BaseApp
 		
 		ARGS.requireAction = true;
 		
-		ARGS.inputRule = "opt";
+		ARGS.inputRule = "yes";
 		ARGS.outputRule = "opt";
 		ARGS.helpInput = "A valid DAT-O-MATIC (.dat) file.";
 		ARGS.helpOutput = "Target directory to build roms ~darkgray~(<build> action)~!~";
@@ -45,7 +45,8 @@ class Main extends BaseApp
 			['delsrc','Delete Source Files after Building', 'For each source file (Archive/Raw) processed, if it was matched, delete it'],
 			['nolang', 'Remove Language Strings from Names', 'e.g. (En,Fr,Es,De) ,etc will be removed from the rom names'],
 			['country', 'Prioritize Country Codes (CSV)', '= for Defaults (USA,EUROPE)', 'yes'],
-			['log', 'Produce detailed Log on Source or Target dir']
+			['log', 'Produce detailed Log on Source or Target dir'],
+			['p','Set number of parallel tasks (default 2)','','yes']
 			
 		];
 		
@@ -71,6 +72,11 @@ class Main extends BaseApp
 				argsOptions.country,
 				argsOptions.c
 			);
+			
+			if (argsOptions.p != null)
+			{
+				Engine.P_PARALLEL = Std.parseInt(argsOptions.p);
+			}
 			
 		}
 		catch (e:String) exitError(e);

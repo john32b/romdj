@@ -311,20 +311,20 @@ class SevenZip extends Archiver
 	/**
 	   Extract to STDOUT Stream.
 	   @param	arc Archive to Extract
-	   @param	files If set, will extract these files from within the archive
+	   @param	file If set, will extract this file from within the archive
 	**/
-	public function extractToPipe(arc:String, files:Array<String> = null):IReadable
+	public function extractToPipe(arc:String, file:String = null):IReadable
 	{
 		app.LOG_STDOUT = false;
 		var p:Array<String> = [
 			'e', '-mmt', arc
 		];
 		var _inf = "";
-		if (files == null) {
+		if (file == null) {
 			_inf = 'all files';
 		}else {
-			_inf = files.join(',');
-			p = p.concat(files);
+			_inf = file;
+			p.push(file);
 		}
 		LOG.log('Extracting [$_inf] from "$arc" to PIPE');
 		p.push('-so');

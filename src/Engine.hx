@@ -77,7 +77,7 @@ class Engine
 	public static var FLAG_OVERWRITE:Bool = false;
 	
 	// TRUE: Will produce log at target dir
-	public static var FLAG_LOG:Bool;
+	public static var FLAG_REP:Bool;
 	
 	//====================================================;
 	
@@ -92,7 +92,7 @@ class Engine
 	static var isInited:Bool = false;
 	
 	// Log file path, if -log is set
-	static var log_file:String;
+	static var report_file:String;
 	
 	// Info, extensions that were scanned
 	static var info_scanExt = '';
@@ -115,8 +115,8 @@ class Engine
 	// List of DUPLICATE ROMS, ( just info text , not proper filenames )
 	static var arDups:Array<String>;
 	
-	// List of roms that were BUILT/CREATED in target
-	static var arBuilt:Array<String>;
+	// List of Fixed Rom Names that were PROCESSED (either Built or Verified)
+	static var arProc:Array<String>;
 	
 	// List of roms that had error when reading (log use mostly)
 	static var arFailRead:Array<String>;
@@ -183,23 +183,22 @@ class Engine
 		@throws String Error
 		DEV: This could be part of the Engine.init() 
 	**/
-	public static function P_SET(delSrc:Bool, noLang:Bool, log:Bool, country:String, compression:String)
+	public static function P_SET(delSrc:Bool, noLang:Bool, rep:Bool, country:String, compression:String)
 	{
 		FLAG_DEL_SOURCE = delSrc;
 		FLAG_REMOVE_LANG = noLang;
 		
-		if ((FLAG_LOG = log) == true)
+		if ((FLAG_REP = rep) == true)
 		{
-			var dd = '_RomUtil Log ' + DateTools.format(Date.now(), "%Y-%m-%d (%H'%M'%S)") + '.txt';
+			var dd = '_RomUtil Report ' + DateTools.format(Date.now(), "%Y-%m-%d (%H'%M'%S)") + '.txt';
 			
 			if (P_ACTION == BUILD)
 			{
-				log_file = Path.join(P_TARGET, dd);
+				report_file = Path.join(P_TARGET, dd);
 			}else{
-				log_file = Path.join(P_SOURCE, dd);	
+				report_file = Path.join(P_SOURCE, dd);	
 			}
 			
-			LOG.setLogFile(log_file);
 		}
 		
 		if ((P_COMPRESSION = compression) != null) 
@@ -240,7 +239,7 @@ class Engine
 		// Init statistics info
 		prCRC = [];
 		arDups = [];
-		arBuilt = [];
+		arProc = [];
 		arFailRead = [];
 		arUnmatch = [];
 		
@@ -264,17 +263,14 @@ class Engine
 		
 		j.addTaskGen(()->{
 			
-			#if debug
-			//if (c == 15) return null;
-			#end
-			
 			var f = arFiles[c];
 			if (f == null) return null;
-			c++;
 			return new CTask(Path.basename(f), (t)->{
-				var w = new Worker(f,c);
+				var w = new Worker(f, c + 1);
 					t.syncWith(w);
+					c++;
 					w.start();
+					
 			});
 		});
 		
@@ -284,36 +280,28 @@ class Engine
 		var _r = 1 / arFiles.length;
 		
 		j.events.on('taskStatus', (a, t)->{
-			
-			//if (a == CTaskStatus.start)
-			//{
-				//print('Start $t');
-			//}
-			
 			if (a == CTaskStatus.complete)
 			{
 				//print('Complete $t');
 				progress = Math.round((c * _r) * 100);
 				T.restorePos(); T.clearLine();
-				T.fg('yellow').printf('> ($c / ${arFiles.length}) : ').resetFg();
-				ProgressBar.print(50, progress);
+				print(' |1|Working| : (|4|$c / ${arFiles.length}|)');
+				T.print(' '); ProgressBar.print(40, progress);
 			}
-			
 		});
 
 		j.onComplete = ()->{
-			//T.restorePos().clearLine();
+			T.restorePos().clearLine().endl().clearLine().up();
 			print_post();
-			if (j.ERROR == null)
-			{
-				// SUCCESS
-				print('|4|:: Operation Complete |',true);
-			}else{
-				// ERROR
-				print('|4|:: Operation FAILED|', true);
-				print('|4|${j.ERROR}',true);
-			}
+			print('|4|:: Operation Complete |',true);
 			return; // needed for some reason, else wont compile
+		};
+		
+		j.onFail = (err)-> {
+			T.restorePos().clearLine().endl().clearLine().up();
+			print('|3|: [Operation FAILED]|', true);
+			print('|1|  ${j.ERROR}|', true);
+			return;
 		};
 		
 		// -- Start Printing to Terminal
@@ -321,6 +309,7 @@ class Engine
 		T.pageDown(3); // for savepos to work on windows CMD it needs space
 		T.savePos();
 		// --
+		
 		
 		j.start();
 	}//---------------------------------------------------;
@@ -360,7 +349,7 @@ class Engine
 		
 		var fl = "";
 		if (FLAG_DEL_SOURCE) fl += "|1|Delete Source| | ";
-		if (FLAG_LOG) fl += "|1|Log| | ";
+		if (FLAG_REP) fl += "|1|Report| | ";
 		if (FLAG_REMOVE_LANG) fl += "|1|Remove Languages| | ";
 		if (FLAG_FIX_COUNTRY) fl += "|1|Country Priority| : |4|" + COUNTRY_AR.toString() + "| | ";
 		
@@ -371,6 +360,8 @@ class Engine
 		}
 		
 		print(' Scanning Extensions : [|1| $info_scanExt |]', true);
+		print(' Dat File Total Entries : |4|${DAT.count}|', true);
+		print(' Files found in Input Dir : |1|${arFiles.length}|', true);
 		
 		// print(StringTools.lpad("", '-', LINE), true);
 	}//---------------------------------------------------;
@@ -383,16 +374,14 @@ class Engine
 	static function print_post()
 	{
 		print(StringTools.lpad("", '-', LINE), true);
-		print('Dat File Total Entries : |4|${DAT.count}|', true);
-		print('Files found in Input Dir : |1|${arFiles.length}|', true);
-		
+
 		var v = switch(P_ACTION) {
 			case BUILD:  "Built into Target";
 			case VERIFY: "Verified";
 			default:"";
 		};
 		
-		print('$v : |2|${arBuilt.length}| unique roms');
+		print('$v : |2|${arProc.length}| unique roms');
 		
 		if (arDups.length > 0)
 		{
@@ -404,7 +393,7 @@ class Engine
 		
 		if (arUnmatch.length > 0)
 		{
-			print('Files with No Match : |3|${arUnmatch.length}|',true);
+			print('Input Files with No Match : |3|${arUnmatch.length}|',true);
 			for (f in arUnmatch) {
 				LOG.log('  $f');
 			}		
@@ -418,9 +407,11 @@ class Engine
 			}		
 		}
 		
-		if (FLAG_LOG)
+		if (FLAG_REP)
 		{
-			print('Created logfile with more info: |4|$log_file|');
+			print('Created logfile with more info: |4|$report_file|');
+		}else{
+			print('Use |4|-report| to produce a detailed report file');
 		}
 		
 		print(StringTools.lpad("", '-', LINE), true);
@@ -496,7 +487,7 @@ class Engine
 	public static function str_prioritizeCountry(s:String, COUNT:Array<String>):String
 	{
 		var strb = COUNT.join('|');
-		var r = new EReg('\\(.*($strb).*?\\)', 'i');
+		var r = new EReg('\\([^\\)]*($strb).*?\\)', 'i');
 		if (r.match(s)) {
 			var c = r.matched(0);
 				c = c.substr(1, c.length - 2); // Remove ( and )

@@ -52,6 +52,7 @@ class Worker implements ISendingProgress
 		}
 		
 		S = new SevenZip();
+		S.onFail = onFail;
 		romsMatched = 0;
 		shortname = Path.basename(src);
 	}//---------------------------------------------------;
@@ -112,10 +113,11 @@ class Worker implements ISendingProgress
 				}
 			};
 			AX.start();
+			
 		}else // RAW file -->
 		{
 			romsTotal = 1;
-			var entry = Engine.DAT.DB.get(S.getFileHash(src));
+			var entry = Engine.DAT.DB.get(S.getHashFile(src));
 			if (entry != null) {
 				romsMatched++;
 				action_match(entry, null, opComplete); // There is no queue, so just call the complete function
@@ -135,21 +137,21 @@ class Worker implements ISendingProgress
 	   - If a file cannot be created, then the whole JOB will FAIL
 	   
 	**/
-	function action_build(e:DatEntry, ?arcPath:String, _end:Void->Void)
+	function action_build(e:DatEntry, ?arcPath:String, end:Void->Void)
 	{
 		log_match(e, arcPath);
 		
 		if (checkDup(e, arcPath)) {
-			return _end();
+			return end();
 		}
 		
 		var name_fixed = Engine.apply_NameFilters(e.name);
 		var romFilename = name_fixed + Engine.DAT.EXT;
 		var targetFile = '${Engine.P_TARGET}/${name_fixed}'; // NO EXT YET
 		
-		var end = function(){
-			Engine.arBuilt.push(targetFile);
-			_end();
+		var endOK = function(){
+			Engine.arProc.push(e.name);
+			end();
 		};
 		
 		var fail = function(e:String) {
@@ -162,6 +164,7 @@ class Worker implements ISendingProgress
 			onFail(e);
 		};
 		
+		S.onFail = fail;
 		
 		// - Get target file and check if it exists
 		if (Engine.COMPRESSION == null) {
@@ -191,7 +194,7 @@ class Worker implements ISendingProgress
 					if(err!=null)
 						fail('Could not copy "$src" --> "$targetFile');
 					else
-						end();
+						endOK();
 				});
 				
 			} else {
@@ -205,7 +208,7 @@ class Worker implements ISendingProgress
 				});
 				ws.once('close', ()->{
 					ws.removeAllListeners();
-					end();
+					endOK();
 				});
 				
 				pipeout.pipe(ws);
@@ -214,9 +217,8 @@ class Worker implements ISendingProgress
 		else
 		{
 			var ws = S.compressFromPipe(targetFile, romFilename, '-mx${Engine.COMPRESSION[1]}');
-				S.onComplete = end;
-				S.onFail = fail;
-					
+				S.onComplete = endOK;
+				
 			if (arcPath == null) {
 				// <From Raw File>
 				var rs = Fs.createReadStream(src);
@@ -246,6 +248,8 @@ class Worker implements ISendingProgress
 			return end();
 		}
 		
+		Engine.arProc.push(e.name);
+		
 		end();
 	}//---------------------------------------------------;
 	
@@ -274,9 +278,9 @@ class Worker implements ISendingProgress
 		{
 			log('${padL1}Duplicate Entry "${e.name}" skipping.');
 			if(arcPath==null){
-				Engine.arDups.push(shortname);
+				Engine.arDups.push('${e.name} :: [$shortname]');
 			}else{
-				Engine.arDups.push('$shortname >> $arcPath');
+				Engine.arDups.push('${e.name} :: [$shortname >> $arcPath]');
 			}
 			return true;
 		}else{

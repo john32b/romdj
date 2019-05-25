@@ -41,9 +41,12 @@ class Archiver implements ISendingProgress
 	public var onComplete:Void->Void = ()->{}; // OnComplete(Success), read ERROR for errors
 	public var onFail:String->Void = (a)->{};	
 	
-	public function new(exePath:String)
+	var exePath:String;
+	
+	public function new(_exePath:String)
 	{
-		app = new CLIApp(exePath);
+		exePath = _exePath;
+		app = new CLIApp(_exePath);
 	}//---------------------------------------------------;
 
 	/**

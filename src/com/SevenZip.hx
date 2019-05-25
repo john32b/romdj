@@ -46,6 +46,9 @@ class SevenZip extends Archiver
 	
 	// Folder where the exe is in
 	public static var PATH:String = "";
+	
+	
+	var extraOnClose:Void->Void = null;
 	//---------------------------------------------------;
 	
 	/**
@@ -64,8 +67,7 @@ class SevenZip extends Archiver
 	{
 		super(Path.join(PATH, WIN32_EXE));
 		
-		app.LOG_STDERR = true;
-		
+		// Works on most operations, but not in getHashPipe()
 		app.onClose = (s)->{
 			
 			if (!s) // ERROR
@@ -74,34 +76,29 @@ class SevenZip extends Archiver
 				return onFail(ERROR);
 			}
 			
-			if (operation == "compress")
-			{
-				// Since stdout gives me the compressed size,
-				// capture in case I need it later
-				// - STDOUT Example :
-				// - .......Files read from disk: 1\nArchive size: 544561 bytes (532 KiB)\nEverything is Ok
-				var r = ~/Archive size: (\d+)/;
-				if (r.match(app.stdErrLog)) /// was STDOUT
-				{
-					COMPRESSED_SIZE = Std.parseFloat(r.matched(1));
-					LOG.log('$ARCHIVE_PATH Compressed size = $COMPRESSED_SIZE');
-				}
+			if (extraOnClose != null) {
+				extraOnClose();
+				extraOnClose = null;
 			}
+			
 			onComplete();
-		};
-		
-		// - Progress capture is the same on all operations ::
-		// - STDOUT :
-		// - 24% 13 + Devil Dice (USA).cue
-		var expr = ~/(\d+)%/;		
-		app.onStdErr = (data)->{
-			if (expr.match(data)) {
-				progress = Std.parseInt(expr.matched(1)); // Triggers setter and sends to user
-			}	
 		};
 		
 	}//---------------------------------------------------;
 	
+	
+	function enable_captureProgress()
+	{
+		// - Progress capture is the same on all operations ::
+		// - STDOUT :
+		// - 24% 13 + Devil Dice (USA).cue
+		var expr = ~/(\d+)%/;		
+		app.onStdOut = (data)->{
+			if (expr.match(data)) {
+				progress = Std.parseInt(expr.matched(1)); // Triggers setter and sends to user
+			}	
+		};
+	}//---------------------------------------------------;
 	
 	/**
 	   Compress a bunch of files into an archive
@@ -121,8 +118,21 @@ class SevenZip extends Archiver
 		ARCHIVE_PATH = archive;
 		operation = "compress";
 		progress = 0;
+		enable_captureProgress();
 		LOG.log('Compressing "$files" to "$archive" ... Compression:$cs' );
 		
+		extraOnClose = ()->{
+			// Since stdout gives me the compressed size,
+			// capture in case I need it later
+			// - STDOUT Example :
+			// - .......Files read from disk: 1\nArchive size: 544561 bytes (532 KiB)\nEverything is Ok
+			var r = ~/Archive size: (\d+)/;
+			if (r.match(app.stdOutLog))
+			{
+				COMPRESSED_SIZE = Std.parseFloat(r.matched(1));
+				LOG.log('$ARCHIVE_PATH Compressed size = $COMPRESSED_SIZE');
+			}
+		};
 		// 7Zip does not have a command to replace the archive
 		// so I delete it manually if it exists
 		if (cs == S01)
@@ -138,7 +148,7 @@ class SevenZip extends Archiver
 		
 		var p:Array<String> = [
 			'a', 						// Add
-			'-bsp2', 					// Redirect PROGRESS outout to STDERR
+			'-bsp1', 					// Redirect PROGRESS outout to STDOUT
 			'-mmt' 						// Multithreaded
 		];
 		if (cs != null) p = p.concat(cs.split(' '));
@@ -161,10 +171,11 @@ class SevenZip extends Archiver
 		ARCHIVE_PATH = archive;
 		operation = "extract";
 		progress = 0;
+		enable_captureProgress();
 		var p:Array<String> = [
 			'e',			// Extract
 			archive,
-			'-bsp2',		// Progress in stderr
+			'-bsp1',		// Progress in stdout
 			'-mmt',			// Multithread
 			'-aoa',			// Overwrite
 			'-o$output'		// Target folder. DEV: Does not need "" works with spaces just fine
@@ -224,7 +235,7 @@ class SevenZip extends Archiver
 	public function getFileList(a:String, getSize:Bool = false):Array<String>
 	{
 		//LOG.log('Getting file list from `$a`');
-		var stdo:String = try ChildProcess.execSync('"${app.exePath}" l "$a"', {stdio:['ignore', 'pipe', 'ignore']}) catch (e:Error) return null;
+		var stdo:String = try ChildProcess.execSync('"${exePath}" l "$a"', {stdio:['ignore', 'pipe', 'ignore']}) catch (e:Error) return null;
 		var ar:Array<String> = stdo.toString().split('\n');	// NOTE: toString() is needed, else error
 		
 		var l = 0;
@@ -265,15 +276,7 @@ class SevenZip extends Archiver
 	**/
 	public function getHash(arc:String, file:String, type:String = "CRC32"):String
 	{
-		var stdo:String = ChildProcess.execSync('"${app.exePath}" e "$arc" "$file" -so | "${app.exePath}" h -si -scrc${type}');
-		
-		// DEV Note:
-		// + This way ^ works OK.
-		// + If I do this this way, it will buffer overflow in large files.
-			// var stdo:String = ChildProcess.execSync('"${app.exePath}" h -si -scrc${type}', {
-			// input:ChildProcess.execSync('"${app.exePath}" e "$arc" "$file" -so') });
-		// + I could do it ASYNC, but this way is just more convenient
-		
+		var stdo:String = ChildProcess.execSync('"${exePath}" e "$arc" "$file" -so | "${exePath}" h -si -scrc${type}');
 		return hashParse(stdo.toString());	// Note: To String is needed, else it errors.
 	}//---------------------------------------------------;
 	
@@ -284,12 +287,27 @@ class SevenZip extends Archiver
 	   @param	type (CRC32|CRC64|SHA1|SHA256)
 	   @return
 	**/
-	public function getFileHash(file:String, type:String = "CRC32"):String
+	public function getHashFile(file:String, type:String = "CRC32"):String
 	{
-		var stdo:String = ChildProcess.execSync('"${app.exePath}" h "$file" -scrc${type}');
+		var stdo:String = ChildProcess.execSync('"${exePath}" h "$file" -scrc${type}');
 		return hashParse(stdo.toString());
 	}//---------------------------------------------------;
 	
+	/**
+	   Get hash from a data stream
+	   @param	type type (CRC32|CRC64|SHA1|SHA256)
+	   @param	callback Null for error, other for value
+	**/
+	public function getHashPipe(type:String = "CRC32", callback:String->Void):IWritable
+	{
+		extraOnClose = ()->{
+			callback(hashParse(app.stdOutLog));
+		};
+		app.start([
+			'h', '-si', '-scrc${type}'
+		]);
+		return app.proc.stdin;
+	}//---------------------------------------------------;
 	
 	// From a (h) call, get the HASH value
 	function hashParse(stdout:String):String

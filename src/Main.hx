@@ -42,10 +42,10 @@ class Main extends BaseApp
 		ARGS.Options = [
 			['i', 'Input Source Folder', 'A path with Rom files (Supported: `7z,zip` or Raw)','yes'],
 			['c', 'If set will apply Compression to the roms when Building', 'Type = [ZIP,7Z], Compression Level = [0...9]\ne.g. "ZIP:9", "7z:4", "ZIP"', 'yes'],
-			['delsrc','Delete Source Files after Building', 'For each source file (Archive/Raw) processed, if it was matched, delete it'],
+			['delsrc','Delete Source Files after Building', 'In case of archives with multiple files, will delete it when all included files were built'],
 			['nolang', 'Remove Language Strings from Names', 'e.g. (En,Fr,Es,De) ,etc will be removed from the rom names'],
 			['country', 'Prioritize Country Codes (CSV)', '= for Defaults (USA,EUROPE)', 'yes'],
-			['log', 'Produce detailed Log on Source or Target dir'],
+			['report', 'Produce detailed Report. on Build the file will be created on <target>','On Verify the file will be created on <source>'],
 			['p','Set number of parallel tasks (default 2)','','yes']
 			
 		];
@@ -68,7 +68,7 @@ class Main extends BaseApp
 			Engine.P_SET(
 				argsOptions.delsrc,
 				argsOptions.nolang,
-				argsOptions.log,
+				argsOptions.report,
 				argsOptions.country,
 				argsOptions.c
 			);

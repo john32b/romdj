@@ -7,6 +7,7 @@ import js.Error;
 import js.node.Fs;
 import js.node.ChildProcess;
 import js.node.Path;
+import js.node.stream.Readable;
 
 // Helper
 import Engine.print as print;
@@ -35,15 +36,17 @@ class Worker implements ISendingProgress
 	var romsMatched:Int;				// How many of those roms were matched to the DAT
 	
 	var no:Int;							// # of src item in list
-	var S:SevenZip;						// General purpose 7zip obj
 	
 	var action_match:(DatEntry, ?String, Void->Void)->Void;
-
-	// ----
 	
-	public function new(Source:String,No:Int) 
+	public static var COUNTER:Int = 0;
+	
+	// --
+	public function new(Source:String) 
 	{
-		src = Source; no = No;
+		COUNTER++;
+		
+		src = Source; no = COUNTER;
 		
 		if (Engine.P_ACTION == EngineAction.BUILD) {
 			action_match = action_build;
@@ -51,8 +54,6 @@ class Worker implements ISendingProgress
 			action_match = action_verify;
 		}
 		
-		S = new SevenZip();
-		S.onFail = onFail;
 		romsMatched = 0;
 		shortname = Path.basename(src);
 	}//---------------------------------------------------;
@@ -68,28 +69,36 @@ class Worker implements ISendingProgress
 		log('${padL0} ($no/${Engine.arFiles.length}) , Processing : "${shortname}"');
 		
 		// Operation Complete : Called when all files are processed
-		var opComplete = ()->{
-			
-			if (romsMatched == 0) 
-			{
+		var opComplete = ()->
+		{
+			// No roms were matched from a zip or raw
+			if (romsMatched == 0) {
 				Engine.arUnmatch.push(src);
 				return onComplete();
 			}
 			
 			// 'source file' processed OK
-			if (Engine.FLAG_DEL_SOURCE && (romsMatched == romsTotal))
-			{
+			if (Engine.FLAG_DEL_SOURCE && (romsMatched == romsTotal)){
 				log('${padL1}Deleting "$src"');
 				try Fs.unlinkSync(src) catch (e:Error) {
 					log('${padL1}ERROR : Cannot Delete : "$src"');
 				}
 			}
-			
 			onComplete();
 		};
 		
+
+		// --
+		// When working with zip files, store the current path of inner files, I need it
+		var last_subFile:String;
+		// getStream() is a generator and everytime it is called it returns
+		// the next file to process in a stream
+		var getStream:Void->IReadable;
 		if (Engine.fileIsArchive(src))
 		{
+			var S = new SevenZip();
+				S.onFail = onFail;
+				
 			subFiles = S.getFileList(src);
 			// The Archive is corrupted / Could not Read it
 			if (subFiles == null) { 
@@ -97,35 +106,48 @@ class Worker implements ISendingProgress
 				log('${padL1} [READ FAIL], skipping');
 				return onComplete();
 			}
-	
 			romsTotal = subFiles.length;
-			
-			var AX = new ArrayExecSync(subFiles);
-			AX.queue_complete = opComplete;
-			AX.queue_action = (f)->{
-				var entry = Engine.DAT.DB.get(S.getHash(src, f));
+			getStream = ()-> {
+				var f = subFiles.pop();
+				last_subFile = f;
+				if (f == null) return null;
+				return S.extractToPipe(src, f);
+			};
+		}else{
+			romsTotal = 1;
+			var _c = false;
+			getStream = ()->{
+				if (_c) return null;
+				_c = true;
+				return Fs.createReadStream(src);
+			};
+		}
+		
+		// --
+		// Process the next file by reading the generator, and getting an entry
+		var doNext:Void->Void;
+		doNext = ()-> 
+		{
+			var rs = getStream();
+			if (rs == null) return opComplete(); // No more files to process
+			var S = new SevenZip();
+				S.onFail = onFail;
+			// Dev: I don't care where or how, as long as it is a stream I need to process it
+			var ws = S.getHashPipe("CRC32", (hash)->{
+				var entry = Engine.DAT.DB.get(hash);
 				if (entry != null) {					
 					romsMatched++;
-					action_match(entry, f, AX.next);
+					action_match(entry, last_subFile, doNext);
 				}else{
 					log('${padL1} [NO MATCH]');
-					AX.next();
+					doNext();
 				}
-			};
-			AX.start();
-			
-		}else // RAW file -->
-		{
-			romsTotal = 1;
-			var entry = Engine.DAT.DB.get(S.getHashFile(src));
-			if (entry != null) {
-				romsMatched++;
-				action_match(entry, null, opComplete); // There is no queue, so just call the complete function
-			}else{
-				log('${padL1} [NO MATCH]');
-				opComplete();
-			}
+			});
+			rs.pipe(ws);
+			return;
 		}
+		
+		doNext();
 	}//---------------------------------------------------;
 	
 	
@@ -163,29 +185,22 @@ class Worker implements ISendingProgress
 			}catch (e:Error){ }
 			onFail(e);
 		};
-		
-		S.onFail = fail;
-		
+				
 		// - Get target file and check if it exists
-		if (Engine.COMPRESSION == null) {
-			targetFile += Engine.DAT.EXT;
-		}else {
-			targetFile += switch(Engine.COMPRESSION[0]) {
-				case "ZIP": '.zip';
-				case "7Z":  '.7z';
-				default: "";
-			}
-		}
+		targetFile += Engine.getCompressionExt();
 		
-		// -
 		if (Fs.existsSync(targetFile) && !Engine.FLAG_OVERWRITE) {
 			log('${padL1}Skipping. Already exists on Target Folder');
 			return end();
+			// TODO : ?
 			// FUTURE: check for file size or crc?
 		}
 		
 		log('Creating "$targetFile"');
 					
+		var S = new SevenZip();
+			S.onFail = fail;
+			
 		if (Engine.COMPRESSION == null)
 		{
 			if (arcPath == null) {
@@ -217,7 +232,7 @@ class Worker implements ISendingProgress
 		else
 		{
 			var ws = S.compressFromPipe(targetFile, romFilename, '-mx${Engine.COMPRESSION[1]}');
-				S.onComplete = endOK;
+			S.onComplete = endOK;
 				
 			if (arcPath == null) {
 				// <From Raw File>

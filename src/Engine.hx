@@ -81,23 +81,26 @@ class Engine
 	
 	//====================================================;
 	
-	// Compiled Parameter Objects
+	// <Compiled> Parameter Objects
 	// Custom Priority Countries Array, Set in P_SET()
 	static var COUNTRY_AR:Array<String> = null;
 	
-	// Compiled Compression Array, Set in P_SET()
+	// <Compiled> Compression Array, Set in P_SET()
 	static var COMPRESSION:Array<String> = null;
 	
 	// Helper
 	static var isInited:Bool = false;
 	
-	// Log file path, if -log is set
+	// Log file path, if -report is set
 	static var report_file:String;
 	
 	// Info, extensions that were scanned
 	static var info_scanExt = '';
 	
-	// Dat object
+	// 
+	static var info_total_files:Int;
+	
+	// The main DAT object holding the Dat Entries
 	static var DAT:DatFile = null;
 	
 	// Terminal Printer
@@ -133,6 +136,8 @@ class Engine
 	public static function init(_action:String, _datPath:String, _sourcePath:String = null, _targetPath:String = null):Void
 	{
 		if (isInited) return; isInited = true;
+		
+		CJob.FLAG_LOG_TASKS = false;
 		
 		// #COLORS
 		P = new Print2(BaseApp.TERMINAL);
@@ -172,6 +177,7 @@ class Engine
 			// it is VERIFY I don't have to check
 			if (P_SOURCE == null) throw "You need to set a `source` directory";
 		}
+		
 		
 	}//---------------------------------------------------;
 	
@@ -236,6 +242,8 @@ class Engine
 		arFiles = FileTool.getFileListFromDirR(P_SOURCE, exts);
 		info_scanExt = exts.join(' ');
 		
+		info_total_files = arFiles.length;
+		
 		// Init statistics info
 		prCRC = [];
 		arDups = [];
@@ -248,6 +256,8 @@ class Engine
 		// --
 		var j = new CJob("Process Roms : " + P_ACTION);
 		
+		Worker.COUNTER = 0;
+		
 		if (P_PARALLEL < 1) P_PARALLEL = 1;
 		j.MAX_CONCURRENT = P_PARALLEL; 
 	
@@ -256,48 +266,42 @@ class Engine
 			j.MAX_CONCURRENT = Os.cpus().length;
 		}
 		
-		j.FLAG_LOG_TASKS = true;
-		
-		// Count to all files
-		var c = 0;
-		
 		j.addTaskGen(()->{
-			
-			var f = arFiles[c];
+			var f = arFiles.shift();
 			if (f == null) return null;
 			return new CTask(Path.basename(f), (t)->{
-				var w = new Worker(f, c + 1);
+				var w = new Worker(f);
 					t.syncWith(w);
-					c++;
 					w.start();
-					
 			});
 		});
 		
 		// --
-		
 		var progress:Int = 0;
 		var _r = 1 / arFiles.length;
+		var c:Int = 0; // All file counter
 		
-		j.events.on('taskStatus', (a, t)->{
-			if (a == CTaskStatus.complete)
-			{
-				//print('Complete $t');
+		j.events.on('taskStatus', (a, t)->
+		{
+			if (a == CTaskStatus.complete){
+				c++;
 				progress = Math.round((c * _r) * 100);
 				T.restorePos(); T.clearLine();
-				print(' |1|Working| : (|4|$c / ${arFiles.length}|)');
+				print(' |1|Working| : (|4|$c / ${info_total_files}|)');
 				T.print(' '); ProgressBar.print(40, progress);
 			}
 		});
 
-		j.onComplete = ()->{
+		j.onComplete = ()->
+		{
 			T.restorePos().clearLine().endl().clearLine().up();
 			print_post();
 			print('|4|:: Operation Complete |',true);
 			return; // needed for some reason, else wont compile
 		};
 		
-		j.onFail = (err)-> {
+		j.onFail = (err)-> 
+		{
 			T.restorePos().clearLine().endl().clearLine().up();
 			print('|3|: [Operation FAILED]|', true);
 			print('|1|  ${j.ERROR}|', true);
@@ -309,7 +313,6 @@ class Engine
 		T.pageDown(3); // for savepos to work on windows CMD it needs space
 		T.savePos();
 		// --
-		
 		
 		j.start();
 	}//---------------------------------------------------;
@@ -565,5 +568,18 @@ class Engine
 		TEMP = Path.join(p, 'romutil_temp_3890ff18');	// Random String
 		if (!Fs.existsSync(TEMP)) Fs.mkdirSync(TEMP);
 	}//---------------------------------------------------;
+	
+	
+	// Process the <COMPRESSION> parameter and return according extension
+	public static function getCompressionExt():String
+	{
+		if (COMPRESSION == null) return DAT.EXT;
+		return switch(Engine.COMPRESSION[0]) {
+			case "ZIP": '.zip';
+			case "7Z":  '.7z';
+			default: throw "Invalid Compression String";
+		};
+	}//---------------------------------------------------;
+	
 	
 }// --

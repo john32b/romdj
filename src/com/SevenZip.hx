@@ -21,6 +21,7 @@
  *  - onComplete ();
  *  - onFail(Error);
  * 
+ 
  * ---------------------------------------*/
 
 /// NOTE : Borrowed from `cdcrush.nodejs`
@@ -28,6 +29,7 @@
 package com;
 import djNode.tools.HTool;
 import djNode.tools.LOG;
+import djNode.utils.CLIApp;
 import djNode.utils.Registry;
 import js.Error;
 import js.node.ChildProcess;
@@ -39,16 +41,20 @@ import js.node.stream.Writable.IWritable;
 @:dce
 class SevenZip extends Archiver
 {
-	
-	static var S01 = ">update";	// Inner Helper special string ID to use on update/compress
-	
-	static var WIN32_EXE:String = "7za.exe"; // Standalone exe version.
+	// Inner Helper special string ID to use on update/compress
+	static var S01 = ">update";	
 	
 	// Folder where the exe is in
 	public static var PATH:String = "";
 	
+	// Standalone exe version.
+	static var WIN32_EXE:String = "7za.exe"; 
 	
-	var extraOnClose:Void->Void = null;
+	// Custom call on Successful app close
+	var extraClose:Void->Void;
+	
+	// True: Log only errors
+	static var FLAG_LOG_QUIET:Bool = true;
 	//---------------------------------------------------;
 	
 	/**
@@ -59,36 +65,60 @@ class SevenZip extends Archiver
 		PATH = Registry.getValue("HKEY_CURRENT_USER\\Software\\7-Zip", "Path");
 		if (PATH != null) {
 			WIN32_EXE = '7z.exe';
-			LOG.log("7Zip path read from registry [OK] : " + PATH);
+			LOG.log('7Zip path read from registry [OK] : $PATH');
 		}
 	}//---------------------------------------------------;
+	
+	/**
+	   Get a generic compression string
+	   @param	level 1 is the lowest, 9 is the highest
+	**/
+	public static function getCompressionString(l:Int = 4)
+	{
+		HTool.inRange(l, 1, 9);
+		return '-mx${l}';
+	}//---------------------------------------------------;
+	
 	
 	public function new()
 	{
 		super(Path.join(PATH, WIN32_EXE));
 		
-		// Works on most operations, but not in getHashPipe()
 		app.onClose = (s)->{
+			
+			Archiver.ar.remove(app);
 			
 			if (!s) // ERROR
 			{
 				ERROR = app.ERROR;
-				return onFail(ERROR);
+				if (onFail != null) 
+					onFail(ERROR);
+				return;
 			}
 			
-			if (extraOnClose != null) {
-				extraOnClose();
-				extraOnClose = null;
+			if (extraClose != null) {
+				extraClose();
+				extraClose = null;
 			}
 			
-			onComplete();
-		};
-		
+			HTool.sCall(onComplete);
+		};		
 	}//---------------------------------------------------;
 	
-	
-	function enable_captureProgress()
+	//-- Call this when streaming to pipes
+	function prepNoLog()
 	{
+		app.LOG_STDERR = false;
+		app.LOG_STDOUT = false;
+	}//---------------------------------------------------;
+	
+	/**
+	   7Zip Specific, capture progress from STDOUT
+	   - Updates progress (uses setter to call onProgress)
+	**/
+	function app_captureProgress()
+	{
+		progress = 0;
 		// - Progress capture is the same on all operations ::
 		// - STDOUT :
 		// - 24% 13 + Devil Dice (USA).cue
@@ -117,11 +147,11 @@ class SevenZip extends Archiver
 	{
 		ARCHIVE_PATH = archive;
 		operation = "compress";
-		progress = 0;
-		enable_captureProgress();
-		LOG.log('Compressing "$files" to "$archive" ... Compression:$cs' );
 		
-		extraOnClose = ()->{
+		app_captureProgress();
+		
+		extraClose = ()->
+		{
 			// Since stdout gives me the compressed size,
 			// capture in case I need it later
 			// - STDOUT Example :
@@ -130,9 +160,14 @@ class SevenZip extends Archiver
 			if (r.match(app.stdOutLog))
 			{
 				COMPRESSED_SIZE = Std.parseFloat(r.matched(1));
+				if (!FLAG_LOG_QUIET)
 				LOG.log('$ARCHIVE_PATH Compressed size = $COMPRESSED_SIZE');
 			}
-		};
+		}
+		
+		if (!FLAG_LOG_QUIET)
+		LOG.log('Compressing "$files" to "$archive" ... Compression:$cs' );
+		
 		// 7Zip does not have a command to replace the archive
 		// so I delete it manually if it exists
 		if (cs == S01)
@@ -170,8 +205,9 @@ class SevenZip extends Archiver
 	{
 		ARCHIVE_PATH = archive;
 		operation = "extract";
-		progress = 0;
-		enable_captureProgress();
+		
+		app_captureProgress();
+		
 		var p:Array<String> = [
 			'e',			// Extract
 			archive,
@@ -187,6 +223,7 @@ class SevenZip extends Archiver
 			_inf = files.join(',');
 			p = p.concat(files);
 		}
+		if (!FLAG_LOG_QUIET)
 		LOG.log('Extracting [$_inf] from "$archive" to "$output"' );
 		app.start(p);
 		return true;
@@ -209,17 +246,7 @@ class SevenZip extends Archiver
 	
 	
 	
-	/**
-	   Get a generic compression string
-		- Not recommended. Read the 7ZIP docs and produce custom compression 
-	     strings for use in encode();
-	   @param	level 1 is the lowest, 9 is the highest
-	**/
-	public static function getCompressionString(l:Int = 4)
-	{
-		HTool.inRange(l, 1, 9);
-		return '-mx${l}';
-	}//---------------------------------------------------;
+
 	
 	
 	
@@ -234,7 +261,8 @@ class SevenZip extends Archiver
 	**/
 	public function getFileList(a:String, getSize:Bool = false):Array<String>
 	{
-		//LOG.log('Getting file list from `$a`');
+		if (!FLAG_LOG_QUIET)
+		LOG.log('Getting file list from `$a`');
 		var stdo:String = try ChildProcess.execSync('"${exePath}" l "$a"', {stdio:['ignore', 'pipe', 'ignore']}) catch (e:Error) return null;
 		var ar:Array<String> = stdo.toString().split('\n');	// NOTE: toString() is needed, else error
 		
@@ -300,7 +328,7 @@ class SevenZip extends Archiver
 	**/
 	public function getHashPipe(type:String = "CRC32", callback:String->Void):IWritable
 	{
-		extraOnClose = ()->{
+		extraClose = ()->{
 			callback(hashParse(app.stdOutLog));
 		};
 		app.start([
@@ -333,7 +361,7 @@ class SevenZip extends Archiver
 	**/
 	public function extractToPipe(arc:String, file:String = null):IReadable
 	{
-		app.LOG_STDOUT = false;
+		prepNoLog();
 		var p:Array<String> = [
 			'e', '-mmt', arc
 		];
@@ -344,6 +372,7 @@ class SevenZip extends Archiver
 			_inf = file;
 			p.push(file);
 		}
+		if (!FLAG_LOG_QUIET)
 		LOG.log('Extracting [$_inf] from "$arc" to PIPE');
 		p.push('-so');
 		app.start(p);
@@ -360,12 +389,12 @@ class SevenZip extends Archiver
 	**/
 	public function compressFromPipe(arc:String, fname:String, cs:String = null):IWritable
 	{
-		app.LOG_STDOUT = false;
 		var p:Array<String> = [
 			'a', arc, '-mmt'
 		];
 		if (cs != null) p = p.concat(cs.split(' '));
 		p.push('-si${fname}');
+		if (!FLAG_LOG_QUIET)
 		LOG.log('Compressing from PIPE to "$arc" ... Compression:$cs' );
 		app.start(p);
 		return app.proc.stdin;

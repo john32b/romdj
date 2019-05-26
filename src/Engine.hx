@@ -37,6 +37,8 @@ class Engine
 	// Line length
 	static final LINE = 45;
 	
+	// Pre String to all Terminal Prints
+	static final p0 = " ";
 		
 	//====================================================;
 	
@@ -100,6 +102,9 @@ class Engine
 	// 
 	static var info_total_files:Int;
 	
+	// 
+	static var info_verb:String;
+	
 	// The main DAT object holding the Dat Entries
 	static var DAT:DatFile = null;
 	
@@ -123,6 +128,9 @@ class Engine
 	
 	// List of roms that had error when reading (log use mostly)
 	static var arFailRead:Array<String>;
+	
+	
+	static var T:Terminal;
 
 	//====================================================;
 	
@@ -138,6 +146,7 @@ class Engine
 		if (isInited) return; isInited = true;
 		
 		CJob.FLAG_LOG_TASKS = false;
+		T = BaseApp.TERMINAL;
 		
 		// #COLORS
 		P = new Print2(BaseApp.TERMINAL);
@@ -169,11 +178,13 @@ class Engine
 		// - Check params
 		if (P_ACTION == BUILD)
 		{
+			info_verb = "Built";
 			if (P_SOURCE == null) throw "You need to set a `source` directory";
 			if (P_TARGET == null) throw "You need to set a `target` directory";
 			
 		}else
 		{
+			info_verb = "Verified";
 			// it is VERIFY I don't have to check
 			if (P_SOURCE == null) throw "You need to set a `source` directory";
 		}
@@ -251,8 +262,6 @@ class Engine
 		arFailRead = [];
 		arUnmatch = [];
 		
-		var T = BaseApp.TERMINAL;
-		
 		// --
 		var j = new CJob("Process Roms : " + P_ACTION);
 		
@@ -281,43 +290,55 @@ class Engine
 		var _r = 1 / arFiles.length;
 		var c:Int = 0; // All file counter
 		
+		ProgressBar.SYMBOLS = ['█', '░'];
 		j.events.on('taskStatus', (a, t)->
 		{
 			if (a == CTaskStatus.complete){
 				c++;
 				progress = Math.round((c * _r) * 100);
 				T.restorePos(); T.clearLine();
-				print(' |1|Working| : (|4|$c / ${info_total_files}|)');
-				T.print(' '); ProgressBar.print(40, progress);
+				restoreAndClear(2);
+				print('>> |1|Processing| : (|4|$c / ${info_total_files}|) :');
+				T.print(p0); ProgressBar.print(40, progress);
+				P.print1('${p0}${info_verb} ({2}) , No Match ({3}) , Duplicates ({1})   ', [Std.string(arProc.length), Std.string(arUnmatch.length), Std.string(arDups.length)]);
 			}
 		});
 
 		j.onComplete = ()->
 		{
-			T.restorePos().clearLine().endl().clearLine().up();
+			restoreAndClear(3);
+			T.up();
+			print('|5|== [Operation Complete] |', true);
 			print_post();
-			print('|4|:: Operation Complete |',true);
 			return; // needed for some reason, else wont compile
 		};
 		
 		j.onFail = (err)-> 
 		{
-			T.restorePos().clearLine().endl().clearLine().up();
-			print('|3|: [Operation FAILED]|', true);
+			restoreAndClear(3);
+			print('|3|== [Operation Fail]|', true);
 			print('|1|  ${j.ERROR}|', true);
 			return;
 		};
 		
 		// -- Start Printing to Terminal
 		print_pre();
-		T.pageDown(3); // for savepos to work on windows CMD it needs space
+		T.pageDown(4); // for savepos to work on windows CMD it needs space
 		T.savePos();
 		// --
 		
 		j.start();
 	}//---------------------------------------------------;
 	
-	
+	static function restoreAndClear(lines:Int = 1)
+	{
+		T.restorePos();
+		while (--lines >= 0){
+			T.clearLine().endl();
+		}
+		T.restorePos();
+	}//---------------------------------------------------;
+			
 	/**
 	   Prints the running parameters to the terminal
 	   e.g.
@@ -330,25 +351,23 @@ class Engine
 	**/
 	static function print_pre()
 	{
-		print(' ==', true);
 		if (P_ACTION == BUILD) {
-			print(' == |5|[ BUILDING ]|', true);
+			print('=|5| [ BUILDING ]|', true);
 		}else{
-			print(' == |5|[ VERIFYING ]|', true);
+			print('=|5| [ VERIFYING ]|', true);
 		}
-		print(' ==', true);
 		
 		if (DAT != null)
-			print(' Dat File : |2|${DAT.fileLoaded}|', true);
+			print('Dat File : |2|${DAT.fileLoaded}|', true);
 		
 		if (P_TARGET != null)
-			print(' Destination : |2|$P_TARGET|', true);
+			print('Destination : |2|$P_TARGET|', true);
 		
 		if (P_SOURCE != null)
-			print(' Source : |2|$P_SOURCE|', true);
+			print('Source : |2|$P_SOURCE|', true);
 			
 		if (P_COMPRESSION != null)
-			print(' Compression : |1|$P_COMPRESSION|', true);
+			print('Compression : |1|$P_COMPRESSION|', true);
 		
 		var fl = "";
 		if (FLAG_DEL_SOURCE) fl += "|1|Delete Source| | ";
@@ -359,14 +378,14 @@ class Engine
 		if (fl.length > 0)
 		{
 			fl = fl.substr(0, -3);
-			print(' Flags : $fl', true);
+			print('Flags : $fl', true);
 		}
 		
-		print(' Scanning Extensions : [|1| $info_scanExt |]', true);
-		print(' Dat File Total Entries : |4|${DAT.count}|', true);
-		print(' Files found in Input Dir : |1|${arFiles.length}|', true);
+		print('Scanning Extensions : [|1| $info_scanExt |]', true);
+		print('Dat File Total Entries : |4|${DAT.count}|', true);
+		print('Files found in Input Dir : |1|${arFiles.length}|', true);
 		
-		// print(StringTools.lpad("", '-', LINE), true);
+		print('--');
 	}//---------------------------------------------------;
 	
 	
@@ -388,7 +407,7 @@ class Engine
 		
 		if (arDups.length > 0)
 		{
-			print('Duplicates : |3|${arDups.length}|', true);
+			print('Duplicates in Input Folder : |3|${arDups.length}|', true);
 			for (i in arDups) {
 				LOG.log('  $i');
 			}
@@ -412,7 +431,7 @@ class Engine
 		
 		if (FLAG_REP)
 		{
-			print('Created logfile with more info: |4|$report_file|');
+			print('Created a report file with more info: |4|$report_file|');
 		}else{
 			print('Use |4|-report| to produce a detailed report file');
 		}
@@ -430,7 +449,7 @@ class Engine
 	**/
 	public static function print(str:String, log:Bool = false)
 	{
-		var s = P.print2(str);
+		var s = P.print2(p0 + str);
 		if (log) {
 			LOG.log(s);
 		}

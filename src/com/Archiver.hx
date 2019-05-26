@@ -37,8 +37,6 @@ class Archiver implements ISendingProgress
 	
 	var exePath:String;
 	
-	static var ar:Array<CLIApp>;
-	
 	public var ERROR(default, null):String;
 	public var onProgress:Int->Void;
 	public var onComplete:Void->Void;
@@ -46,18 +44,10 @@ class Archiver implements ISendingProgress
 
 	var app:CLIApp;
 	
-	public static function killAll()
-	{
-		if (ar != null) for (i in ar) i.kill();
-	}
-	
 	public function new(_exePath:String)
 	{
 		exePath = _exePath;
 		app = new CLIApp(exePath);
-		
-		if (ar == null) ar = [];
-		ar.push(app);
 	}//---------------------------------------------------;
 
 	/**
@@ -76,7 +66,9 @@ class Archiver implements ISendingProgress
 	**/
 	public function kill()
 	{
-		if (app != null) app.kill();
+		if (app != null) {
+			app.kill();
+		}
 	}//---------------------------------------------------;
 	
 }// -

@@ -7,7 +7,9 @@ import js.Error;
 import js.node.Fs;
 import js.node.ChildProcess;
 import js.node.Path;
+import js.node.fs.WriteStream;
 import js.node.stream.Readable;
+import js.node.stream.Writable.IWritable;
 
 // Helper
 import Engine.print as print;
@@ -58,7 +60,15 @@ class Worker implements ISendingProgress
 		//shortname = Path.basename(src);
 		shortname = Path.relative(Engine.P_SOURCE, src);
 	}//---------------------------------------------------;
-	
+
+	// Force kill
+	var _fk:Void->Void;
+	// -- Called on Self Fail or Job Fail
+	public function forcekill()
+	{
+		log('Worker FORCE_KILL : $src');
+		if (_fk != null) _fk();
+	}//---------------------------------------------------;
 	
 	/**
 	   Operations are SYNC
@@ -82,8 +92,8 @@ class Worker implements ISendingProgress
 			if (Engine.FLAG_DEL_SOURCE && (romsMatched == romsTotal)){
 				log('${padL1}Deleting "$src"');
 				try Fs.unlinkSync(src) catch (e:Error) {
-					Engine.arCannotDelete.push(src);
 					log('${padL1}ERROR : Cannot Delete : "$src"');
+					Engine.arCannotDelete.push(src);
 				}
 			}
 			onComplete();
@@ -155,7 +165,6 @@ class Worker implements ISendingProgress
 	
 	
 	
-	
 	/**
 	   Process [raw file] or [file inside archive] for BUILD operation
 	   - If a file cannot be created, then the whole JOB will FAIL
@@ -174,34 +183,43 @@ class Worker implements ISendingProgress
 		var targetFile = '${Engine.P_TARGET}/${name_fixed}'; // NO EXT YET
 		
 		var endOK = function(){
-			Engine.arProc.push(e.name);
+			arReport(Engine.arProc, e.name, arcPath);
 			end();
 		};
-		
-		var fail = function(e:String) {
-			log('CRITICAL ERROR : $e');
-			try{
-				// I am deleting the target file as it may be incomplete
-				Fs.unlinkSync(targetFile);
-				log('Deleted $targetFile');
-			}catch (e:Error){ }
-			onFail(e);
-		};
-				
+			
 		// - Get target file and check if it exists
 		targetFile += Engine.getCompressionExt();
 		
 		if (Fs.existsSync(targetFile) && !Engine.FLAG_OVERWRITE) {
+			arReport(Engine.arAlreadyExist, e.name, arcPath);
 			log('${padL1}Skipping. Already exists on Target Folder');
 			return end();
-			// TODO : ?
-			// FUTURE: check for file size or crc?
+			// TODO : check for file size or crc??
 		}
 		
 		log('Creating "$targetFile"');
 					
 		var S = new SevenZip();
-			S.onFail = fail;
+			S.onFail = onFail;
+			
+		var _ws:WriteStream;
+		
+		// Called automatically on fail or force kill
+		// --
+		_fk = function() {
+			S.kill();
+			if (_ws != null) {
+				_ws.removeAllListeners();
+				_ws.end();
+			}
+			// I am deleting the target file as it may be incomplete
+			try{
+				Fs.unlinkSync(targetFile);
+				log('Deleted $targetFile');
+			}catch (e:Error){
+				log('Could not delete $targetFile');
+			}
+		}
 			
 		if (Engine.COMPRESSION == null)
 		{
@@ -209,7 +227,7 @@ class Worker implements ISendingProgress
 				// <From Raw File>
 				FileTool.copyFile(src, targetFile, (err)->{
 					if(err!=null)
-						fail('Could not copy "$src" --> "$targetFile');
+						onFail('Could not copy "$src" --> "$targetFile');
 					else
 						endOK();
 				});
@@ -218,10 +236,11 @@ class Worker implements ISendingProgress
 				// <From inside an archive>
 				var pipeout = S.extractToPipe(src, arcPath);
 				var ws = Fs.createWriteStream(targetFile);
+				_ws = ws;
 				ws.once('error', (e:Error)->{
 					ws.removeAllListeners();
 					pipeout.unpipe();
-					fail('Cannot create "$targetFile"');
+					onFail('Cannot create "$targetFile"');
 				});
 				ws.once('close', ()->{
 					ws.removeAllListeners();
@@ -235,7 +254,8 @@ class Worker implements ISendingProgress
 		{
 			var ws = S.compressFromPipe(targetFile, romFilename, '-mx${Engine.COMPRESSION[1]}');
 			S.onComplete = endOK;
-				
+			//onFail was set earlier	
+			
 			if (arcPath == null) {
 				// <From Raw File>
 				var rs = Fs.createReadStream(src);
@@ -265,11 +285,7 @@ class Worker implements ISendingProgress
 			return end();
 		}
 		
-		if(arcPath==null){
-			Engine.arProc.push('${e.name}\t >>>>> \t"$shortname"');
-		}else{
-			Engine.arProc.push('${e.name}\t >>>>> \t"$shortname" > `$arcPath`');
-		}
+		arReport(Engine.arProc, e.name, arcPath);
 		
 		end();
 	}//---------------------------------------------------;
@@ -298,11 +314,7 @@ class Worker implements ISendingProgress
 		if (Engine.prCRC.exists(e.crc))
 		{
 			log('${padL1}Duplicate Entry "${e.name}" skipping.');
-			if(arcPath==null){
-				Engine.arDups.push('${e.name}\t >>>>> \t"$shortname"');
-			}else{
-				Engine.arDups.push('${e.name}\t >>>>> \t"$shortname" > `$arcPath`');
-			}
+			arReport(Engine.arDups, e.name, arcPath);
 			return true;
 		}else{
 			Engine.prCRC.set(e.crc, true);
@@ -311,5 +323,13 @@ class Worker implements ISendingProgress
 	}//---------------------------------------------------;
 
 	
+	function arReport(ar:Array<String>, n:String, p:String)
+	{
+		if (p == null){
+			ar.push('${n}\t >>>>> \t"$shortname"');
+		}else{
+			ar.push('${n}\t >>>>> \t"$shortname"->"$p"');
+		}
+	}//---------------------------------------------------;
 	
 }// --

@@ -10,6 +10,7 @@ import djNode.tools.FileTool;
 import djNode.tools.LOG;
 import djNode.utils.Print2;
 import djNode.utils.ProgressBar;
+import js.Error;
 import js.node.Fs;
 import js.node.Os;
 import js.node.Path;
@@ -154,6 +155,8 @@ class Engine
 	static var arFailRead:Array<String>;
 	
 	static var arCannotDelete:Array<String>;
+
+	static var arAlreadyExist:Array<String>;
 	
 	static var T:Terminal;
 
@@ -169,8 +172,8 @@ class Engine
 	public static function init(_action:String, _datPath:String, _sourcePath:String = null, _targetPath:String = null):Void
 	{
 		if (isInited) return; isInited = true;
+
 		
-		CJob.FLAG_LOG_TASKS = false;
 		T = BaseApp.TERMINAL;
 		report = [];
 		
@@ -277,7 +280,6 @@ class Engine
 		// Extensions to search for Files
 		var exts = ARCHIVE_EXT.copy(); exts.push(DAT.EXT);
 		arFiles = filterBlacklist( FileTool.getFileListFromDirR(P_SOURCE) );
-		
 		info_total_files = arFiles.length;
 		
 		// Init statistics info
@@ -287,32 +289,26 @@ class Engine
 		arFailRead = [];
 		arUnmatch = [];
 		arCannotDelete = [];
-		
-		if (FLAG_REP)
-		{
-			rep(Engine.rep_head);
-			rep(DAT.info);
-		}
+		arAlreadyExist = [];
 		
 		// --
-		var j = new CJob("Process Roms : " + P_ACTION);
-		
 		Worker.COUNTER = 0;
+		
+		var j = new CJob("Process Roms : " + P_ACTION);
 		
 		if (P_PARALLEL < 1) P_PARALLEL = 1;
 		j.MAX_CONCURRENT = P_PARALLEL; 
-	
-		if (j.MAX_CONCURRENT > Os.cpus().length)
-		{
+		if (j.MAX_CONCURRENT > Os.cpus().length) {
 			j.MAX_CONCURRENT = Os.cpus().length;
 		}
 		
 		j.addTaskGen(()->{
 			var f = arFiles.shift();
 			if (f == null) return null;
-			return new CTask(Path.basename(f), (t)->{
+			return new CTask(Path.basename(f), (t:CTask)->{
 				var w = new Worker(f);
 					t.syncWith(w);
+					t.killForce = w.forcekill;
 					w.start();
 			});
 		});
@@ -332,35 +328,45 @@ class Engine
 				restoreAndClear(2);
 				print('>> |1|Processing| : (|4|$c / ${info_total_files}|) :');
 				T.print(p0); ProgressBar.print(40, progress);
-				P.print1('${p0}${info_verb} ({2}) , No Match ({3}) , Duplicates ({1})   ', [Std.string(arProc.length), Std.string(arUnmatch.length), Std.string(arDups.length)]);
+				P.print1('${p0}${info_verb} ({2}) , No Match ({3})  ', [Std.string(arProc.length), Std.string(arUnmatch.length) ]);
 			}
 		});
 
 		j.onComplete = ()->
 		{
 			restoreAndClear(3);
-			T.up();
+			T.up(); // overlap the '--' line
+			report_post();
 			print('|5|== [Operation Complete] |',true);
-			print_post();
-			repSave();
 			return; // needed for some reason, else wont compile
 		};
 		
 		j.onFail = (err)-> 
 		{
 			restoreAndClear(3);
+			rep('\n---- WARNING ----');
+			rep('---- PROCESS TERMINATED UNEXPECTEDLY ----\n');
+			report_post();
 			print('|3|== [Operation Fail]|', true);
 			print('|1|  ${j.ERROR}|', true);
-			repSave();
 			return;
 		};
 		
-		// -- Start Printing to Terminal
-		print_pre();
+		
+		// -- Start Printing , Reporting
+		
+		if (FLAG_REP)
+		{
+			rep(Engine.rep_head);
+			rep(DAT.info);
+		}
+		
+		report_pre();
+		
 		T.pageDown(4); // for savepos to work on windows CMD it needs space
 		T.savePos();
-		// --
 		
+		// --
 		j.start();
 	}//---------------------------------------------------;
 	
@@ -374,7 +380,7 @@ class Engine
 	}//---------------------------------------------------;
 			
 	/**
-	   Prints the running parameters to the terminal
+	   Reports running parameters to the terminal / Report File
 	   e.g.
 	   
 	   	- Building SET from (datfile)
@@ -383,8 +389,10 @@ class Engine
 		Flags : RemoveLanguages | CondenseCountries | DeleteSource
 		
 	**/
-	static function print_pre()
+	static function report_pre()
 	{
+		rep('');
+		
 		if (P_ACTION == BUILD) {
 			print('= OPERATION : |5| BUILD |', true);
 		}else{
@@ -394,13 +402,13 @@ class Engine
 		if (DAT != null)
 		{
 			print('Dat File : |2|${DAT.fileLoaded}|', true);
-			print('  contains : |4|${DAT.count}| Entries', true);
+			print('  contains : (|4|${DAT.count}|) Entries', true);
 		}
 		
 		if (P_SOURCE != null)
 		{
 			print('Source : |2|$P_SOURCE|', true);
-			print('  contains |2|$info_total_files| scannable files', true);
+			print('  contains (|2|$info_total_files|) possible rom files', true);
 		}
 			
 		if (P_TARGET != null)
@@ -428,11 +436,12 @@ class Engine
 	
 	
 	/**
-	   Print info after all files processed
+	   Report info after all files processed
+	   - Also saves the Report File
 	**/
-	static function print_post()
+	static function report_post()
 	{
-		print(StringTools.lpad("", '-', LINE), true);
+		print(StringTools.lpad("", '-', LINE));
 		
 		rep('');
 		
@@ -446,19 +455,19 @@ class Engine
 		rep(arProc,true);
 		rep('');
 		
-		if (arDups.length > 0)
-		{
-			s = print('Duplicates in Input Folder (|3|${arDups.length}|)');
-			rep('>>>>$s');
-			rep(arDups,true);
-			rep('');
-		}
-		
 		if (arUnmatch.length > 0)
 		{
 			s = print('Input Files with No Match (|3|${arUnmatch.length}|)');
 			rep('>>>>$s');
 			rep(arUnmatch,true);
+			rep('');
+		}
+		
+		if (arDups.length > 0)
+		{
+			s = print('Duplicates in Input Folder (|3|${arDups.length}|)');
+			rep('>>>>$s');
+			rep(arDups,true);
 			rep('');
 		}
 		
@@ -477,6 +486,16 @@ class Engine
 			rep(arCannotDelete,true);
 			rep('');
 		}
+		
+		if (arAlreadyExist.length > 0)
+		{
+			s = print('Files already in source folder (skipped) (|1|${arAlreadyExist.length}|)');
+			rep('>>>>$s');
+			rep(arAlreadyExist, true);
+			rep('');
+		}
+		
+		repSave(); // Note: If it fails, it will exit
 		
 		if (FLAG_REP)
 		{
@@ -540,7 +559,14 @@ class Engine
 	{
 		if (report_file != null)
 		{
-			Fs.writeFileSync(report_file, report.join('\n'), {encoding:'utf8'});
+			try{
+				Fs.writeFileSync(report_file, report.join('\n'), {encoding:'utf8'});
+			}catch (e:Error)
+			{
+				print('|3|ERROR: Could not create REPORT FILE|');
+				print('|3|${e.message}|');
+				Sys.exit(1);
+			}
 		}
 	}//---------------------------------------------------;
 

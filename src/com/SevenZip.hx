@@ -86,8 +86,6 @@ class SevenZip extends Archiver
 		
 		app.onClose = (s)->{
 			
-			Archiver.ar.remove(app);
-			
 			if (!s) // ERROR
 			{
 				ERROR = app.ERROR;

@@ -2,6 +2,7 @@ package;
 
 import com.SevenZip;
 import djNode.BaseApp;
+import djNode.task.CJob;
 import djNode.tools.LOG;
 import js.node.Fs;
 
@@ -11,11 +12,11 @@ class Main extends BaseApp
 	
 	override function init():Void 
 	{
-		#if (!debug)
-			LOG.FLAG_SHOW_MESSAGE_TYPE = false;
-			LOG.FLAG_SHOW_POS = false;
-			// Log file will be set later when it is set in the parameters
-		#else
+		LOG.FLAG_SHOW_MESSAGE_TYPE = false;
+		LOG.FLAG_SHOW_POS = false;
+		CJob.FLAG_LOG_TASKS = false;
+		
+		#if debug
 			LOG.setLogFile("a:\\log_romtool.txt");
 		#end 
 		
@@ -47,7 +48,6 @@ class Main extends BaseApp
 			['country', 'Prioritize Country Codes (CSV)', '= for Defaults (USA,EUROPE)', 'yes'],
 			['report', 'Produce detailed Report. on Build the file will be created on <target>','On <scan> the file will be created on <source>'],
 			['p','Set number of parallel tasks (default 2)','','yes']
-			
 		];
 		
 		super.init();

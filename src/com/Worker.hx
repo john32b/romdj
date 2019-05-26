@@ -28,7 +28,7 @@ class Worker implements ISendingProgress
 	var padL0 = " >> ";			// Logging helpers
 	var padL1 = "  . ";			// --
 	
-	var shortname:String; 				// Short SRC Name, no path (e.g. "Batman (e).rom" )
+	var shortname:String; 				// Short SRC Name, no path (e.g. "Batman (e).rom" ) Used in Reports
 	var src:String;						// Original file to be processed, could be archive or raw
 	var subFiles:Array<String> = null;	// If <archive>, hold all the files inside the ARC
 	
@@ -51,11 +51,12 @@ class Worker implements ISendingProgress
 		if (Engine.P_ACTION == EngineAction.BUILD) {
 			action_match = action_build;
 		}else{
-			action_match = action_verify;
+			action_match = action_scan;
 		}
 		
 		romsMatched = 0;
-		shortname = Path.basename(src);
+		//shortname = Path.basename(src);
+		shortname = Path.relative(Engine.P_SOURCE, src);
 	}//---------------------------------------------------;
 	
 	
@@ -66,7 +67,7 @@ class Worker implements ISendingProgress
 	**/
 	public function start()
 	{
-		log('${padL0} ($no/${Engine.arFiles.length}) , Processing : "${shortname}"');
+		log('${padL0} ($no/${Engine.info_total_files}) , Processing : "${shortname}"');
 		
 		// Operation Complete : Called when all files are processed
 		var opComplete = ()->
@@ -81,6 +82,7 @@ class Worker implements ISendingProgress
 			if (Engine.FLAG_DEL_SOURCE && (romsMatched == romsTotal)){
 				log('${padL1}Deleting "$src"');
 				try Fs.unlinkSync(src) catch (e:Error) {
+					Engine.arCannotDelete.push(src);
 					log('${padL1}ERROR : Cannot Delete : "$src"');
 				}
 			}
@@ -252,10 +254,10 @@ class Worker implements ISendingProgress
 	
 
 	/**
-	   Process [raw file] or [file inside archive] for VERIFY operation
-	   DEV: Verify cannot fail
+	   Process [raw file] or [file inside archive] for SCAN operation
+	   DEV: Scan cannot fail
 	**/
-	function action_verify(e:DatEntry, ?arcPath:String, end:Void->Void)
+	function action_scan(e:DatEntry, ?arcPath:String, end:Void->Void)
 	{
 		log_match(e, arcPath);
 		
@@ -263,7 +265,11 @@ class Worker implements ISendingProgress
 			return end();
 		}
 		
-		Engine.arProc.push(e.name);
+		if(arcPath==null){
+			Engine.arProc.push('${e.name}\t >>>>> \t"$shortname"');
+		}else{
+			Engine.arProc.push('${e.name}\t >>>>> \t"$shortname" > `$arcPath`');
+		}
 		
 		end();
 	}//---------------------------------------------------;
@@ -293,9 +299,9 @@ class Worker implements ISendingProgress
 		{
 			log('${padL1}Duplicate Entry "${e.name}" skipping.');
 			if(arcPath==null){
-				Engine.arDups.push('${e.name} :: [$shortname]');
+				Engine.arDups.push('${e.name}\t >>>>> \t"$shortname"');
 			}else{
-				Engine.arDups.push('${e.name} :: [$shortname >> $arcPath]');
+				Engine.arDups.push('${e.name}\t >>>>> \t"$shortname" > `$arcPath`');
 			}
 			return true;
 		}else{

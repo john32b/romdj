@@ -17,7 +17,7 @@ import js.node.Path;
 
 enum EngineAction {
 	BUILD;
-	VERIFY;
+	SCAN;
 }
 
 /**
@@ -39,6 +39,31 @@ class Engine
 	
 	// Pre String to all Terminal Prints
 	static final p0 = " ";
+	
+	// Header for the report file
+	static final rep_head = [
+		'== ROM UTIL ',
+		' - Emulation Rom Utilities',
+		' - http://johndimi.github.com/romutil',
+		' ------------------------------------'
+	];
+	
+	// DON'T scan this files when gettinf files from an input dir
+	static var ext_blacklist:Array<String> = [
+		'.dll',
+		'.exe',
+		'.png',
+		'.jpg',
+		'.avi',
+		'.mp4',
+		'.mkv',
+		'.txt',
+		'.nfo',
+		'.cfg',
+		'.sav',
+		'.srm',
+		'.state'
+	];
 		
 	//====================================================;
 	
@@ -94,12 +119,11 @@ class Engine
 	static var isInited:Bool = false;
 	
 	// Log file path, if -report is set
-	static var report_file:String;
+	static var report_file:String = null;
 	
-	// Info, extensions that were scanned
-	static var info_scanExt = '';
+	// Actual report file data, this will be written onto the report file
+	static var report:Array<String>;
 	
-	// 
 	static var info_total_files:Int;
 	
 	// 
@@ -111,7 +135,7 @@ class Engine
 	// Terminal Printer
 	public static var P:Print2;
 
-	// For every game that was verified/built, keep its CRC
+	// For every game that was scanned/built, keep its CRC
 	static var prCRC:Map<String,Bool>;
 	
 	// The rom files on the source folder
@@ -123,12 +147,13 @@ class Engine
 	// List of DUPLICATE ROMS, ( just info text , not proper filenames )
 	static var arDups:Array<String>;
 	
-	// List of Fixed Rom Names that were PROCESSED (either Built or Verified)
+	// List of Fixed Rom Names that were PROCESSED (either Built or Scanned)
 	static var arProc:Array<String>;
 	
 	// List of roms that had error when reading (log use mostly)
 	static var arFailRead:Array<String>;
 	
+	static var arCannotDelete:Array<String>;
 	
 	static var T:Terminal;
 
@@ -147,6 +172,7 @@ class Engine
 		
 		CJob.FLAG_LOG_TASKS = false;
 		T = BaseApp.TERMINAL;
+		report = [];
 		
 		// #COLORS
 		P = new Print2(BaseApp.TERMINAL);
@@ -184,11 +210,10 @@ class Engine
 			
 		}else
 		{
-			info_verb = "Verified";
-			// it is VERIFY I don't have to check
+			info_verb = "Scanned";
+			// it is SCAN I don't have to check
 			if (P_SOURCE == null) throw "You need to set a `source` directory";
 		}
-		
 		
 	}//---------------------------------------------------;
 	
@@ -209,6 +234,7 @@ class Engine
 		{
 			var dd = '_RomUtil Report ' + DateTools.format(Date.now(), "%Y-%m-%d (%H'%M'%S)") + '.txt';
 			
+			// Dev: Specify the report file but don't create yet.
 			if (P_ACTION == BUILD)
 			{
 				report_file = Path.join(P_TARGET, dd);
@@ -244,14 +270,13 @@ class Engine
 	
 	/**
 	   After setting running parameters,
-	   starts an action (BUILD,VERIFY)
+	   starts an action (BUILD,SCAN)
 	**/
 	public static function start()
 	{
 		// Extensions to search for Files
 		var exts = ARCHIVE_EXT.copy(); exts.push(DAT.EXT);
-		arFiles = FileTool.getFileListFromDirR(P_SOURCE, exts);
-		info_scanExt = exts.join(' ');
+		arFiles = filterBlacklist( FileTool.getFileListFromDirR(P_SOURCE) );
 		
 		info_total_files = arFiles.length;
 		
@@ -261,6 +286,13 @@ class Engine
 		arProc = [];
 		arFailRead = [];
 		arUnmatch = [];
+		arCannotDelete = [];
+		
+		if (FLAG_REP)
+		{
+			rep(Engine.rep_head);
+			rep(DAT.info);
+		}
 		
 		// --
 		var j = new CJob("Process Roms : " + P_ACTION);
@@ -308,8 +340,9 @@ class Engine
 		{
 			restoreAndClear(3);
 			T.up();
-			print('|5|== [Operation Complete] |', true);
+			print('|5|== [Operation Complete] |',true);
 			print_post();
+			repSave();
 			return; // needed for some reason, else wont compile
 		};
 		
@@ -318,6 +351,7 @@ class Engine
 			restoreAndClear(3);
 			print('|3|== [Operation Fail]|', true);
 			print('|1|  ${j.ERROR}|', true);
+			repSave();
 			return;
 		};
 		
@@ -352,19 +386,26 @@ class Engine
 	static function print_pre()
 	{
 		if (P_ACTION == BUILD) {
-			print('=|5| [ BUILDING ]|', true);
+			print('= OPERATION : |5| BUILD |', true);
 		}else{
-			print('=|5| [ VERIFYING ]|', true);
+			print('= OPERATION : |5| SCAN |', true);
 		}
 		
 		if (DAT != null)
+		{
 			print('Dat File : |2|${DAT.fileLoaded}|', true);
+			print('  contains : |4|${DAT.count}| Entries', true);
+		}
 		
+		if (P_SOURCE != null)
+		{
+			print('Source : |2|$P_SOURCE|', true);
+			print('  contains |2|$info_total_files| scannable files', true);
+		}
+			
 		if (P_TARGET != null)
 			print('Destination : |2|$P_TARGET|', true);
 		
-		if (P_SOURCE != null)
-			print('Source : |2|$P_SOURCE|', true);
 			
 		if (P_COMPRESSION != null)
 			print('Compression : |1|$P_COMPRESSION|', true);
@@ -381,10 +422,6 @@ class Engine
 			print('Flags : $fl', true);
 		}
 		
-		print('Scanning Extensions : [|1| $info_scanExt |]', true);
-		print('Dat File Total Entries : |4|${DAT.count}|', true);
-		print('Files found in Input Dir : |1|${arFiles.length}|', true);
-		
 		print('--');
 	}//---------------------------------------------------;
 	
@@ -396,37 +433,49 @@ class Engine
 	static function print_post()
 	{
 		print(StringTools.lpad("", '-', LINE), true);
-
-		var v = switch(P_ACTION) {
-			case BUILD:  "Built into Target";
-			case VERIFY: "Verified";
-			default:"";
-		};
 		
-		print('$v : |2|${arProc.length}| unique roms');
+		rep('');
+		
+		var s:String = '';
+		
+		s = print('Files processed (|1|${info_total_files}|)');
+		rep('>>>>$s\n');
+		
+		s = print('$info_verb (|2|${arProc.length}|) unique roms');
+		rep('>>>>$s');
+		rep(arProc,true);
+		rep('');
 		
 		if (arDups.length > 0)
 		{
-			print('Duplicates in Input Folder : |3|${arDups.length}|', true);
-			for (i in arDups) {
-				LOG.log('  $i');
-			}
+			s = print('Duplicates in Input Folder (|3|${arDups.length}|)');
+			rep('>>>>$s');
+			rep(arDups,true);
+			rep('');
 		}
 		
 		if (arUnmatch.length > 0)
 		{
-			print('Input Files with No Match : |3|${arUnmatch.length}|',true);
-			for (f in arUnmatch) {
-				LOG.log('  $f');
-			}		
+			s = print('Input Files with No Match (|3|${arUnmatch.length}|)');
+			rep('>>>>$s');
+			rep(arUnmatch,true);
+			rep('');
 		}
 		
 		if (arFailRead.length > 0)
 		{
-			print('Files that failed to read : |3|${arFailRead.length}|', true);
-			for (f in arFailRead) {
-				LOG.log('  $f');
-			}		
+			s = print('Files that failed to read (|3|${arFailRead.length}|)');
+			rep('>>>>$s');
+			rep(arFailRead,true);
+			rep('');
+		}
+		
+		if (arCannotDelete.length > 0)
+		{
+			s = print('Files that could not Delete (|3|${arCannotDelete.length}|)');
+			rep('>>>>$s');
+			rep(arCannotDelete,true);
+			rep('');
 		}
 		
 		if (FLAG_REP)
@@ -436,7 +485,8 @@ class Engine
 			print('Use |4|-report| to produce a detailed report file');
 		}
 		
-		print(StringTools.lpad("", '-', LINE), true);
+		print(StringTools.lpad("", '-', LINE));
+		
 	}//---------------------------------------------------;
 		
 	
@@ -447,15 +497,52 @@ class Engine
 	   @param	str  |n|string| format
 	   @param	log If true will also log to the global LOG 
 	**/
-	public static function print(str:String, log:Bool = false)
+	public static function print(str:String, r:Bool = false):String
 	{
 		var s = P.print2(p0 + str);
-		if (log) {
-			LOG.log(s);
+		if (r) {
+			report.push(s);
 		}
+		return s;
 	}//---------------------------------------------------;
 	
+
+	/**
+	   Push to report
+	**/
+	static function rep(?s:String, ?ar:Array<String>,number:Bool = false)
+	{
+		if (ar == null)
+		{
+			report.push(p0 + s);
+		}else{
+			if (number)
+			{
+				var c = 1;
+				for (i in ar){
+					report.push(p0 +'\t${c}.\t$i');
+					c++;
+				}
+				
+			}else{
+				for (i in ar){
+					report.push(p0 + i);
+				}
+			}
+		}
+	}//---------------------------------------------------;
+		
 	
+	/**
+	   Save the Report Data to the File ( if the file was set )
+	**/
+	static function repSave()
+	{
+		if (report_file != null)
+		{
+			Fs.writeFileSync(report_file, report.join('\n'), {encoding:'utf8'});
+		}
+	}//---------------------------------------------------;
 
 	
 	// --
@@ -598,6 +685,18 @@ class Engine
 			case "7Z":  '.7z';
 			default: throw "Invalid Compression String";
 		};
+	}//---------------------------------------------------;
+	
+	static function filterBlacklist(f:Array<String>):Array<String>
+	{
+		var R:Array<String> = [];
+		for (i in f) {
+			var ext = Path.extname(i);
+			if (ext_blacklist.indexOf(ext.toLowerCase()) < 0) {
+				R.push(i);
+			}
+		}
+		return R;
 	}//---------------------------------------------------;
 	
 	

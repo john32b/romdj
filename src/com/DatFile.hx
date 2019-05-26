@@ -46,6 +46,9 @@ class DatFile
 	
 	// The path of the DAT file loaded
 	public var fileLoaded:String = "";
+	
+	// Object and Header info
+	public var info:Array<String>;
 
 	//====================================================;
 	
@@ -61,8 +64,6 @@ class DatFile
 	**/
 	public function load(file:String)
 	{
-		LOG.log('Loading DAT : "$file"');
-		
 		reset();
 		fileLoaded = file;
 		
@@ -74,10 +75,14 @@ class DatFile
 
 		var n_header = ac.node.resolve('header');
 		ac.x.removeChild(n_header.x);
-		LOG.log('> Header');
+		
+		info.push('== DatFile Object');
+		info.push('> Loaded File : $file');
+		info.push('> HEADER : ');
+		
 		for (i in n_header.elements) {
 			HEADER[i.name] = i.innerData;
-			LOG.log('  ${i.name} : ${i.innerData}');
+			info.push('\t${i.name} : ${i.innerData}');
 		}
 		
 		//var t = 10;
@@ -111,15 +116,22 @@ class DatFile
 			break;
 		}
 		
-		LOG.log('> Found (${count}) Entries');
-		LOG.log('> Rom Extension : $EXT');
+		info.push('> Found (${count}) Entries');
+		info.push('> Rom Extension : $EXT');
+		info.push('------');
 		
 		}catch (e:Dynamic) throw 'Cannot parse DAT file `$file`'; 
+		
+		for (i in info)
+		{
+			LOG.log(i);
+		}
 	}//---------------------------------------------------;
 	
 	function reset()
 	{
 		HEADER = [];
+		info = [];
 		DB = [];
 		count = 0;
 		fileLoaded = "";

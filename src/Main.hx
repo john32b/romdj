@@ -22,16 +22,16 @@ class Main extends BaseApp
 		
 		// Initialize Program Information here.
 		PROGRAM_INFO = {
-			name:"RomUtil",
-			version:"0.1",
-			info:"Emulation Rom Utilities"
+			name:"RomDJ - Emulation Romset Builder",
+			info:"https://github.com/johndimi/romdj",
+			version:"0.1 (2019-05)"
 		};
 		
 		ARGS.requireAction = true;
 		
 		ARGS.inputRule = "yes";
 		ARGS.outputRule = "opt";
-		ARGS.helpInput = "A valid DAT-O-MATIC (.dat) file.";
+		ARGS.helpInput = "A valid NO-INTRO (.dat) file.";
 		ARGS.helpOutput = "Target directory to build roms ~darkgray~(<build> action)~!~";
 		
 		ARGS.Actions = [
@@ -41,15 +41,19 @@ class Main extends BaseApp
 		];
 		
 		ARGS.Options = [
-			['i', 'Input Source Folder', 'A path with Rom files (Supported: `7z,zip` or Raw)','yes'],
+			['i', 'Input Source Folder', 'A path with Rom files (Supported: 7z zip raw)','yes'],
 			['c', 'If set will apply Compression to the roms when Building', 'Type = [ZIP,7Z], Compression Level = [0...9]\ne.g. "ZIP:9", "7z:4", "ZIP"', 'yes'],
 			['delsrc','Delete Source Files after Building', 'In case of archives with multiple files, will delete it when all included files were built'],
-			['nolang', 'Remove Language Strings from Names', 'e.g. (En,Fr,Es,De) ,etc will be removed from the rom names'],
-			['country', 'Prioritize Country Codes (CSV)', '= for Defaults (USA,EUROPE)', 'yes'],
+			['nolang', 'Remove Language Strings from Filenames', 'e.g. (En,Fr,Es,De), etc will be removed from the rom names'],
+			['country', 'Prioritize Country Codes in Filenames', 'Removes unwanted redundant countries from the Filenames.\nCSV values, = for defaults (USA,EUROPE) e.g. -country BRAZIL,USA\nCheck the readme for more details on how this works', 'yes'],
 			['report', 'Produce detailed Report. on Build the file will be created on <target>','On <scan> the file will be created on <source>'],
 			['p','Set number of parallel tasks (default 2)','','yes']
 		];
 		
+		ARGS.helpText = 'e.g.\n romdj build c:\\dats\\sega_sms.dat -i c:\\roms\\sms_unfixed -o c:\\roms\\sms_fixed -delsrc -country = -nolang -report -c 7Z:9\n' +
+						' - Will build a romset from <c:\\roms\\sms_unfixed> to <c:\\roms\\sms_fixed>, Use 7Z Maximum compression (7Z:9) \n' +
+						'   remove language strings (-nolang), prioritize country codes (EUROPE,USA) in filenames (-country =)\n' +
+						'   Delete original files (-delsrc) and generate a report.txt file in <c:\\roms\\sms_fixed> (-report)';
 		super.init();
 	}//---------------------------------------------------;
 	

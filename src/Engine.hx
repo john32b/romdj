@@ -71,9 +71,6 @@ class Engine
 	// Temp folder for all operations. Set with setTempFolder()
 	static var TEMP:String;
 	
-	// I need it, because some operations are done manually, outside the 7z class
-	static var PATH_7Z:String = "";
-	
 	/// (P)arameters and Boolean (F)lags as they come from the user:
 	
 	// Source folder where the ROMS are
@@ -185,13 +182,12 @@ class Engine
 		P.style(4, 'cyan');
 		P.style(5, 'magenta');
 		
-		SevenZip.pathFromReg();
-		PATH_7Z = Path.join(SevenZip.PATH, '7z.exe');
-
 		P_SOURCE = _sourcePath;
 		P_TARGET = _targetPath;
 		
 		P_ACTION = EngineAction.createByName(_action.toUpperCase());
+		
+		SevenZip.PATH = FileTool.appFileToFullPath("");
 		
 		if (P_SOURCE != null)
 		{

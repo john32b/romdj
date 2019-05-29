@@ -22,7 +22,7 @@ enum EngineAction {
 }
 
 /**
- * RomUtil
+ * Romdj
  * Running parameters and engine
  * Singleton class
  */
@@ -43,9 +43,9 @@ class Engine
 	
 	// Header for the report file
 	static final rep_head = [
-		'== ROM UTIL ',
-		' - Emulation Rom Utilities',
-		' - http://johndimi.github.com/romutil',
+		'== romdj ',
+		' - Emulation Romset Builder',
+		' - https://github.com/johndimi/romdj',
 		' ------------------------------------'
 	];
 	
@@ -235,7 +235,7 @@ class Engine
 		
 		if ((FLAG_REP = rep) == true)
 		{
-			var dd = '_RomUtil Report ' + DateTools.format(Date.now(), "%Y-%m-%d (%H'%M'%S)") + '.txt';
+			var dd = '_romdj Report ' + DateTools.format(Date.now(), "%Y-%m-%d (%H'%M'%S)") + '.txt';
 			
 			// Dev: Specify the report file but don't create yet.
 			if (P_ACTION == BUILD)
@@ -447,10 +447,12 @@ class Engine
 		
 		var s:String = '';
 		
+		var _help = '.... (Identified Name) >>>>> [Source File]';
+		
 		s = print('Files processed (|1|${info_total_files}|)');
 		rep('>>>>$s\n');
 		
-		s = print('$info_verb (|2|${arProc.length}|) unique roms');
+		s = print('$info_verb (|2|${arProc.length}|) unique roms $_help');
 		rep('>>>>$s');
 		rep(arProc,true);
 		rep('');
@@ -465,7 +467,7 @@ class Engine
 		
 		if (arDups.length > 0)
 		{
-			s = print('Duplicates in Input Folder (|3|${arDups.length}|)');
+			s = print('Duplicates in Input Folder (|3|${arDups.length}|) $_help');
 			rep('>>>>$s');
 			rep(arDups,true);
 			rep('');
@@ -489,7 +491,7 @@ class Engine
 		
 		if (arAlreadyExist.length > 0)
 		{
-			s = print('Files already in source folder (skipped) (|1|${arAlreadyExist.length}|)');
+			s = print('Files already in source folder (skipped) (|1|${arAlreadyExist.length}|) $_help');
 			rep('>>>>$s');
 			rep(arAlreadyExist, true);
 			rep('');
@@ -697,7 +699,7 @@ class Engine
 	public static function setTempFolder(p:String = null)
 	{
 		if (p == null) p = js.node.Os.tmpdir();
-		TEMP = Path.join(p, 'romutil_temp_3890ff18');	// Random String
+		TEMP = Path.join(p, 'romdj_temp_3890ff18');	// Random String
 		if (!Fs.existsSync(TEMP)) Fs.mkdirSync(TEMP);
 	}//---------------------------------------------------;
 	

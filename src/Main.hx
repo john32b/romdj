@@ -17,14 +17,15 @@ class Main extends BaseApp
 		CJob.FLAG_LOG_TASKS = false;
 		
 		#if debug
-			LOG.setLogFile("a:\\log_romtool.txt");
+			LOG.setLogFile("a:\\log_romdj.txt");
 		#end 
 		
 		// Initialize Program Information here.
 		PROGRAM_INFO = {
-			name:"RomDJ - Emulation Romset Builder",
+			executable:'romdj',
+			name:"romdj - Emulation Romset Builder",
 			info:"https://github.com/johndimi/romdj",
-			version:"0.1 (2019-05)"
+			version:"0.1 (2019-06)"
 		};
 		
 		ARGS.requireAction = true;

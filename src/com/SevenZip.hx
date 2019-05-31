@@ -293,12 +293,12 @@ class SevenZip extends Archiver
 	}//---------------------------------------------------;
 	
 	/**
-		Get the Hash of a file inside the archive.
+		Get the checksum of a file inside the archive.
 	   
 	   @param	arc The archive
 	   @param	file full path of the file inside the archive e.g. "folder/file.dat"
 	   @param	type (CRC32|CRC64|SHA1|SHA256)
-	   @return  Hash, Warning make sure the file exists in the archive, else random string will be returned
+	   @return  Checksum, Warning make sure the file exists in the archive, else random string will be returned
 	**/
 	public function getHash(arc:String, file:String, type:String = "CRC32"):String
 	{
@@ -308,8 +308,8 @@ class SevenZip extends Archiver
 	
 	
 	/**
-	   Get a file Hash
-	   @param	file The path of the file to get the hash
+	   Get a file Checksum
+	   @param	file The path of the file to get the Checksum
 	   @param	type (CRC32|CRC64|SHA1|SHA256)
 	   @return
 	**/

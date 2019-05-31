@@ -25,7 +25,7 @@ class Main extends BaseApp
 			executable:'romdj',
 			name:"romdj - Emulation Romset Builder",
 			info:"https://github.com/johndimi/romdj",
-			version:"0.1 (2019-06)"
+			version:"0.2 (2019-06)"
 		};
 		
 		ARGS.requireAction = true;
@@ -47,8 +47,12 @@ class Main extends BaseApp
 			['delsrc','Delete Source Files after Building', 'In case of archives with multiple files, will delete it when all included files were built'],
 			['nolang', 'Remove Language Strings from Filenames', 'e.g. (En,Fr,Es,De), etc will be removed from the rom names'],
 			['country', 'Prioritize Country Codes in Filenames', 'Removes unwanted redundant countries from the Filenames.\nCSV values, = for defaults (USA,EUROPE) e.g. -country BRAZIL,USA\nCheck the readme for more details on how this works', 'yes'],
-			['report', 'Produce detailed Report. on Build the file will be created on <target>','On <scan> the file will be created on <source>'],
-			['p','Set number of parallel tasks (default 2)','','yes']
+			
+			['report', 'Produce detailed Report. on Build the file will be created on <target>', 'On <scan> the file will be created on <source>'],
+			
+			['header', 'Skip this many bytes from the beginning of the files when checking checksums', 'Useful in some romsets, like the NES which has a 16 byte header', 'yes'],
+			['nods'  , 'No Deep Scan','Don\'t scan subfolders in the input folder'],
+			['p', 'Set number of parallel tasks (default 2)', '', 'yes']
 		];
 		
 		ARGS.helpText = 'e.g.\n romdj build c:\\dats\\sega_sms.dat -i c:\\roms\\sms_unfixed -o c:\\roms\\sms_fixed -delsrc -country = -nolang -report -c 7Z:9\n' +
@@ -75,7 +79,8 @@ class Main extends BaseApp
 				argsOptions.nolang,
 				argsOptions.report,
 				argsOptions.country,
-				argsOptions.c
+				argsOptions.c,
+				argsOptions.nods
 			);
 			
 			if (argsOptions.p != null)
@@ -83,8 +88,14 @@ class Main extends BaseApp
 				Engine.P_PARALLEL = Std.parseInt(argsOptions.p);
 			}
 			
+			if (argsOptions.header != null)
+			{
+				Engine.P_HEADER_SKIP = Std.parseInt(argsOptions.header);
+			}
+			
 		}
 		catch (e:String) exitError(e);
+		
 		
 		Engine.start();
 	}//---------------------------------------------------;

@@ -7,7 +7,6 @@ import djNode.Terminal;
 import djNode.task.CJob;
 import djNode.task.CTask;
 import djNode.tools.FileTool;
-import djNode.tools.LOG;
 import djNode.utils.Print2;
 import djNode.utils.ProgressBar;
 import js.Error;
@@ -89,6 +88,9 @@ class Engine
 	// #SET DIRECTLY
 	public static var P_PARALLEL:Int = 2;
 	
+	// Skip this many bytes when reading files to check for checksum
+	public static var P_HEADER_SKIP:Int = 0;
+	
 	// TRUE: Condense/Prioritize the Countries. Uses vars in (COUNTRY_AR)
 	public static var FLAG_FIX_COUNTRY:Bool;
 	
@@ -103,6 +105,8 @@ class Engine
 	
 	// TRUE: Will produce log at target dir
 	public static var FLAG_REP:Bool;
+	
+	public static var FLAG_NODS:Bool;
 	
 	//====================================================;
 	
@@ -133,7 +137,7 @@ class Engine
 	// Terminal Printer
 	public static var P:Print2;
 
-	// For every game that was scanned/built, keep its CRC
+	// For every game that was matched/built, keep its CRC
 	static var prCRC:Map<String,Bool>;
 	
 	// The rom files on the source folder
@@ -154,6 +158,9 @@ class Engine
 	static var arCannotDelete:Array<String>;
 
 	static var arAlreadyExist:Array<String>;
+	
+	// After an operation, build this array with missing roms to complete the set
+	static var arMissing:Array<String>;
 	
 	static var T:Terminal;
 
@@ -203,13 +210,13 @@ class Engine
 		// - Check params
 		if (P_ACTION == BUILD)
 		{
-			info_verb = "Built";
+			info_verb = "Matched & Built";
 			if (P_SOURCE == null) throw "You need to set a `source` directory";
 			if (P_TARGET == null) throw "You need to set a `target` directory";
 			
 		}else
 		{
-			info_verb = "Scanned";
+			info_verb = "Matched";
 			// it is SCAN I don't have to check
 			if (P_SOURCE == null) throw "You need to set a `source` directory";
 		}
@@ -222,12 +229,12 @@ class Engine
 		- ! Call after init(); so target folder is set
 		- Also sets defaults
 		@throws String Error
-		DEV: This could be part of the Engine.init() 
 	**/
-	public static function P_SET(delSrc:Bool, noLang:Bool, rep:Bool, country:String, compression:String)
+	public static function P_SET(delSrc:Bool, noLang:Bool, rep:Bool, country:String, compression:String, nods:Bool)
 	{
 		FLAG_DEL_SOURCE = delSrc;
 		FLAG_REMOVE_LANG = noLang;
+		FLAG_NODS = nods;
 		
 		if ((FLAG_REP = rep) == true)
 		{
@@ -240,6 +247,14 @@ class Engine
 			}else{
 				report_file = Path.join(P_SOURCE, dd);	
 			}
+			
+			try{
+				Fs.writeFileSync(report_file, '-' , {encoding:'utf8'});
+			}catch (e:Error)
+			{
+				throw 'Cannot create Report File "$report_file"';
+			}
+			
 			
 		}
 		
@@ -275,7 +290,12 @@ class Engine
 	{
 		// Extensions to search for Files
 		var exts = ARCHIVE_EXT.copy(); exts.push(DAT.EXT);
-		arFiles = filterBlacklist( FileTool.getFileListFromDirR(P_SOURCE) );
+		
+		if (FLAG_NODS){
+			arFiles = filterBlacklist( FileTool.getFileListFromDir(P_SOURCE, true) );
+		}else{
+			arFiles = filterBlacklist( FileTool.getFileListFromDirR(P_SOURCE) ); 
+		}
 		info_total_files = arFiles.length;
 		
 		// Init statistics info
@@ -286,10 +306,13 @@ class Engine
 		arUnmatch = [];
 		arCannotDelete = [];
 		arAlreadyExist = [];
+		arMissing = [];
 		
 		// --
 		Worker.COUNTER = 0;
 		
+		if (P_HEADER_SKIP < 0) P_HEADER_SKIP = 0;
+
 		var j = new CJob("Process Roms : " + P_ACTION);
 		
 		if (P_PARALLEL < 1) P_PARALLEL = 1;
@@ -342,7 +365,7 @@ class Engine
 			restoreAndClear(3);
 			rep('\n---- WARNING ----');
 			rep('---- PROCESS TERMINATED UNEXPECTEDLY ----\n');
-			report_post();
+			// report_post();
 			print('|3|== [Operation Fail]|', true);
 			print('|1|  ${j.ERROR}|', true);
 			return;
@@ -437,34 +460,67 @@ class Engine
 	**/
 	static function report_post()
 	{
-		print(StringTools.lpad("", '-', LINE));
+		// --
+		// Build missing
 		
+		for (k => v in DAT.DB)
+		{
+			var ent = prCRC.get(k);
+			if (ent == null)
+			{
+				arMissing.push(v.romname);
+			}
+		}
+		
+		print(StringTools.lpad("", '-', LINE));
 		rep('');
 		
 		var s:String = '';
-		
 		var _help = '.... (Identified Name) >>>>> [Source File]';
 		
+		function pr_(txt:String, ar:Array<String>){
+			if(ar.length>0) rep('$p0    $txt (${ar.length})');
+		};
+	
 		s = print('Files processed (|1|${info_total_files}|)');
-		rep('>>>>$s\n');
+			rep('=== $s');
+			// -- Extra Info on REP
+			rep('$p0    Dat File Entries (${DAT.count})');
+			pr_('Matched', arProc);
+			pr_('No Match', arUnmatch);
+			pr_('Missing', arMissing);
+			pr_('Duplicates in Input Folder', arDups);
+			pr_('Files that failed to read', arFailRead);
+			pr_('Files that could not Delete', arCannotDelete);
+			pr_('Files already in source folder (skipped)', arAlreadyExist);
+			rep('\n');
 		
-		s = print('$info_verb (|2|${arProc.length}|) unique roms $_help');
-		rep('>>>>$s');
+		s = print('$info_verb (|2|${arProc.length}|) unique roms');
+		rep('===== $s $_help');
 		rep(arProc,true);
 		rep('');
+		
+		
+		if (arMissing.length > 0)
+		{
+			s = print('Missing Roms (|1|${arMissing.length}|)');
+			rep('===== $s');
+			rep(arMissing, true);
+			rep('');
+		}
 		
 		if (arUnmatch.length > 0)
 		{
 			s = print('Input Files with No Match (|3|${arUnmatch.length}|)');
-			rep('>>>>$s');
+			rep('===== $s');
 			rep(arUnmatch,true);
 			rep('');
 		}
 		
 		if (arDups.length > 0)
 		{
-			s = print('Duplicates in Input Folder (|3|${arDups.length}|) $_help');
-			rep('>>>>$s');
+			s = print('Duplicates in Input Folder (|3|${arDups.length}|)');
+			rep('===== $s $_help');
 			rep(arDups,true);
 			rep('');
 		}
@@ -472,7 +528,7 @@ class Engine
 		if (arFailRead.length > 0)
 		{
 			s = print('Files that failed to read (|3|${arFailRead.length}|)');
-			rep('>>>>$s');
+			rep('===== $s');
 			rep(arFailRead,true);
 			rep('');
 		}
@@ -480,15 +536,15 @@ class Engine
 		if (arCannotDelete.length > 0)
 		{
 			s = print('Files that could not Delete (|3|${arCannotDelete.length}|)');
-			rep('>>>>$s');
+			rep('===== $s');
 			rep(arCannotDelete,true);
 			rep('');
 		}
 		
 		if (arAlreadyExist.length > 0)
 		{
-			s = print('Files already in source folder (skipped) (|1|${arAlreadyExist.length}|) $_help');
-			rep('>>>>$s');
+			s = print('Files already in source folder (skipped) (|1|${arAlreadyExist.length}|)');
+			rep('===== $s $_help');
 			rep(arAlreadyExist, true);
 			rep('');
 		}
@@ -537,7 +593,7 @@ class Engine
 			{
 				var c = 1;
 				for (i in ar){
-					report.push(p0 +'\t${c}.\t$i');
+					report.push(p0 +'\t${c}. $i');
 					c++;
 				}
 				

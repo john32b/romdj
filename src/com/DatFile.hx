@@ -23,7 +23,6 @@ typedef DatEntry = {
  * 
  *  - Get DATS from `https://datomatic.no-intro.org`
  * 	- Loads a DAT file and creates a DB
- *  - Handles `MD5` only, disregards other hashes
  * 
  */
 class DatFile 
@@ -81,8 +80,10 @@ class DatFile
 		info.push('> HEADER : ');
 		
 		for (i in n_header.elements) {
-			HEADER[i.name] = i.innerData;
-			info.push('\t${i.name} : ${i.innerData}');
+			try{
+				HEADER[i.name] = i.innerData;
+				info.push('\t${i.name} : ${i.innerData}');
+			}catch (e:Dynamic){ }
 		}
 		
 		//var t = 10;
@@ -120,7 +121,10 @@ class DatFile
 		info.push('> Rom Extension : $EXT');
 		info.push('------');
 		
-		}catch (e:Dynamic) throw 'Cannot parse DAT file `$file`'; 
+		}catch (e:Dynamic) {
+			LOG.log(e);
+			throw 'Cannot parse DAT file `$file`'; 
+		}
 		
 		for (i in info)
 		{

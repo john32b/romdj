@@ -4,9 +4,12 @@ import djNode.tools.FileTool;
 import djNode.utils.ISendingProgress;
 import com.DatFile.DatEntry;
 import js.Error;
+import js.Node;
 import js.node.Fs;
 import js.node.ChildProcess;
 import js.node.Path;
+import js.node.Require;
+import js.node.Stream;
 import js.node.fs.WriteStream;
 import js.node.stream.Readable;
 import js.node.stream.Writable.IWritable;
@@ -84,7 +87,7 @@ class Worker implements ISendingProgress
 		{
 			// No roms were matched from a zip or raw
 			if (romsMatched == 0) {
-				Engine.arUnmatch.push(src);
+				Engine.arUnmatch.push(shortname);
 				return onComplete();
 			}
 			
@@ -103,9 +106,11 @@ class Worker implements ISendingProgress
 		// --
 		// When working with zip files, store the current path of inner files, I need it
 		var last_subFile:String;
+
 		// getStream() is a generator and everytime it is called it returns
-		// the next file to process in a stream
+		// the next file to process (in stream mode), if no more files returns null
 		var getStream:Void->IReadable;
+		
 		if (Engine.fileIsArchive(src))
 		{
 			var S = new SevenZip();
@@ -123,7 +128,17 @@ class Worker implements ISendingProgress
 				var f = subFiles.pop();
 				last_subFile = f;
 				if (f == null) return null;
-				return S.extractToPipe(src, f);
+				var str = S.extractToPipe(src, f);
+				
+				if (Engine.P_HEADER_SKIP > 0)
+				{
+					// I need to alter the stream to skip the first `P_HEADER_SKIP` bytes
+					var SC = new StreamHeaderCut(Engine.P_HEADER_SKIP);
+					str.pipe(SC);
+					return SC;
+				}
+				
+				return str;
 			};
 		}else{
 			romsTotal = 1;
@@ -131,7 +146,7 @@ class Worker implements ISendingProgress
 			getStream = ()->{
 				if (_c) return null;
 				_c = true;
-				return Fs.createReadStream(src);
+				return Fs.createReadStream(src, {start:Engine.P_HEADER_SKIP});
 			};
 		}
 		

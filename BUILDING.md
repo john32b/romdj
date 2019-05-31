@@ -7,7 +7,7 @@
 - HAXE 4  
 https://haxe.org/download/
 
-- hxnodejs 6.9.1 (*library*)  
+- hxnodejs (*library*)  
 https://github.com/HaxeFoundation/hxnodejs
 `haxelib install hxnodejs`
 

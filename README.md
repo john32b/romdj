@@ -4,7 +4,7 @@
 **Author:** John Dimi :computer:, <johndimi@outlook (.) com> *twitter*: [@jondmt](https://twitter.com/jondmt)  
 **Project Page and Sources:** [https://github.com/johndimi/romdj](https://github.com/johndimi/romdj)  
 **Language:** HAXE compiled to Node.js  
-**Version:** 0.1 **Platform:** Windows Terminal  
+**Version:** 0.2 **Platform:** Windows Terminal  
 
 
 ## :mega: What is it
@@ -15,18 +15,15 @@
 
 **What it can do:**  
 
-- Scan a folder for roms that match a .dat file and **BUILD properly named** roms in an output folder.
-
-- It can build roms in archive format (**.zip .7z**), or **raw** files *(e.g. game.rom)*
-
+- Scan a folder for rom  and **BUILD properly named** roms in an output folder.
+- Build roms inside archives (**.zip .7z**), or **raw** files *(e.g. game.rom)*
 - Can read/process roms from within archives *(zip,7z)*
-
-- Option to apply **custom naming filters** *(e.g. remove languages from rom name, more info further down)*
+- **Scan** a folder to find out which roms you are missing for a no-intro full-set  (*`-report` parameter*)
 
 
 ![Run Example](media/demorun1.gif)  
 
-**Features / How it works**
+**More Features / How it works**
 
 - Runs on **NodeJS**, built with **HAXE** *(https://haxe.org)*.
 
@@ -34,11 +31,11 @@
 
 - Can process each input file in **parallel**, so the more threads the faster *(set with parameter -p)*.
 
-- Option to generate a detailed **report** file after an operation.
+- :star: Supports skipping the header portion on files *(Works with the NES no-intro set)*
 
 - Supports reading archives with **multiple roms** inside them.
 
-- Scans all files in an input dir *(except common extensions, like images and executables)*, and **checks file hashes** against the database, so it can **identify rom files** no matter their name or extension.
+- Scans all files in an input dir *(except common extensions, like images and executables)*, and **checks file checksum** against the database, so it can **identify rom files** no matter their name or extension.
 
 ![visual example](media/file_example.png)  
 > Visual Example: Rom files will be identified, and then created with proper names to a format of your choice *(zip,7z or raw)*
@@ -87,31 +84,39 @@ You can customize the process by declaring some extra parameters:
 
 - **Delete Source** `-delsrc`  
   On build operation, will delete the source files after they have been created to target dir.  
-
-  > :point_right: If source file is archive with multiple files. It will only be deleted if all of its included files were built
+  
+> :point_right: If source file is archive with multiple files. It will only be deleted if all of its included files were built
 
 - **Create Report File** `-report`  
-  After the process completes,  this will create a `.txt` report file with more detailed information on the operations. *(List of files copied, duplicates, read errors, skipped, etc )*  
-
-  > :point_right:  The report file is auto-named based on date. On `build` it will be created on the target folder On `scan` it will be created on the source folder.
+  After the process completes,  this will create a `.txt` report file with more detailed information on the operations. *(List of files copied, duplicates, read errors, skipped, etc )*   
+  
+> :point_right:  The report file is auto-named based on date. On `build` it will be created on the target folder On `scan` it will be created on the source folder.
 
 - **Parallel Tasks** `-p NUM`  
-  `NUM`: Number of maximum parallel tasks. From 1 and up. *(If not set default = 2)*  
-
-  > :warning: Don't set this higher than the number of your physical cores.
+  `NUM`: Number of maximum parallel tasks. From 1 and up. *(If not set default = 2)*   
+  
+> :warning: Don't set this higher than the number of your physical cores.
 
 - **Filter: Prioritize Countries** `-country X,Y,Z`  
   `X,Y,Z`: Country Codes to prioritize/keep on the filenames. Comma Separated Values.  
   Country codes not declared will be removed from the filename if they are along with a country you set, else if not along a country you set, they will be kept.  
   
-  >:point_down: More examples on how this works further below  
+>:point_down: More examples on how this works further below  
 
 - **Remove Language Codes** `-nolang`  
-  Removes language codes from the filenames.  
-  > e.g. `"World Cup USA 94 (Europe, Brazil) (En,Fr,De,Es,It,Nl,Pt,Sv)"` ➡  
+  Removes language codes from the filenames.   
+  > e.g. `"World Cup USA 94 (Europe, Brazil) (En,Fr,De,Es,It,Nl,Sv)"` ➡  
   > `"World Cup USA 94 (Europe, Brazil)"`
 
+- **Skip Header** `-header N`  
+  Skip `N` bytes from the beginning of the files when checking for checksums.   
+  
+> :point_down: Check below for more info
 
+- **No Deep Scan** `-nods`  
+  Do not scan subfolders in the <input> folder. It can be useful sometimes.
+
+----
 
 ### :baby_chick: Prioritize Country Codes
 
@@ -126,18 +131,23 @@ You can use multiple country codes (comma separated)
 You can use `=` to use the default country codes (Europe,USA)  
 `-country =` is the same as `-country europe,usa`  
 
+### :baby_chick: Skipping Header bytes
+
+To properly check against some no-intro sets, the header part of the rom needs to be skipped. You can pass the `-header X` parameter to tell romdj to skip the first X bytes when checking for checksums.
+
+> In my knowledge, the **NES** no-intro set is without headers. The NES rom header is 16 bytes so you need to pass `-header 16` when working with NES roms.
 
 
-## :warning: NOTES :warning:
+## :paperclip: NOTES
 
-This is a first release, and even though I tested for bugs and possible errors, some might have slipped, if you encounter anything not working right, please let me know!  
-Also feel free to give some feedback and make a feature suggestion.
+This is a first release, and even though I tested for bugs and possible errors, some might have slipped, if you encounter anything not working right, please let me know ! 
+
+Also feel free to give feedback and make suggestions on how this program could be improved.
 
 ----
 
 Thanks for checking this out, 
 John.
-
 
 
 :smile: *Buy me a beer [https://www.paypal.me/johndimi](https://www.paypal.me/johndimi)*

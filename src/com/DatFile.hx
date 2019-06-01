@@ -7,6 +7,7 @@ import js.node.Path;
 import djNode.tools.LOG;
 
 
+// Current version supports only one rom file per entry
 typedef DatEntry = {
 	name:String,
 	description:String,
@@ -86,21 +87,27 @@ class DatFile
 			}catch (e:Dynamic){ }
 		}
 		
-		//var t = 10;
 		for (i in ac.elements) 
 		{
-			//if (--t == 0) break;
 			count++;
 			var _d = i.node.description;	// Alternative to `i.node.resolve('description');`
-			var _r = i.node.rom;
+			var _r = i.nodes.rom;
+			
+			if (_r.length > 1)
+			{
+				throw 'DAT File Error, Multiple Roms per Entry, is NOT SUPPORTED yet';
+			}			
+			
+			var rom = _r[0];
+			
 			var f:DatEntry = {
 				name:i.att.name,
 				description:_d.innerData,
-				romname:_r.att.name,
-				md5:_r.att.md5,
-				crc:_r.att.crc,
-				size:Std.parseInt(_r.att.size),
-				status:_r.x.exists('status')?_r.att.status:"-"
+				romname:rom.att.name,
+				md5:rom.att.md5,
+				crc:rom.att.crc,
+				size:Std.parseInt(rom.att.size),
+				status:rom.x.exists('status')?rom.att.status:"-"
 			};
 			DB.set(f.crc, f);
 		}
@@ -121,9 +128,13 @@ class DatFile
 		info.push('> Rom Extension : $EXT');
 		info.push('------');
 		
-		}catch (e:Dynamic) {
-			LOG.log(e);
+		}catch (e:Error) {
+			LOG.log(e.message);
 			throw 'Cannot parse DAT file `$file`'; 
+		}
+		catch (e:String) {
+			LOG.log(e);
+			throw e;
 		}
 		
 		for (i in info)

@@ -1,3 +1,4 @@
 /.vscode
 /bin/*.js
+/bin/*.map
 /dev

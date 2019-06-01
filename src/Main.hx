@@ -25,7 +25,7 @@ class Main extends BaseApp
 			executable:'romdj',
 			name:"romdj - Emulation Romset Builder",
 			info:"https://github.com/johndimi/romdj",
-			version:"0.2 (2019-06)"
+			version :Engine.VERSION
 		};
 		
 		ARGS.requireAction = true;
@@ -96,9 +96,7 @@ class Main extends BaseApp
 		}
 		catch (e:String) exitError(e);
 		
-		
 		Engine.start();
 	}//---------------------------------------------------;
-	
 	
 }// --

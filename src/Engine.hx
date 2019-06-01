@@ -28,6 +28,9 @@ enum EngineAction {
 @:allow(com.Worker)
 class Engine 
 {
+	
+	public static final VERSION = '0.2.1';
+	
 	// Valid Archive Extensions that can be Read from the engine
 	static final ARCHIVE_EXT:Array<String> = ['.zip', '.7z']; // (keep lowercase)
 	
@@ -42,7 +45,7 @@ class Engine
 	
 	// Header for the report file
 	static final rep_head = [
-		'== romdj ',
+		'== romdj ' + VERSION,
 		' - Emulation Romset Builder',
 		' - https://github.com/johndimi/romdj',
 		' ------------------------------------'
@@ -233,6 +236,12 @@ class Engine
 	public static function P_SET(delSrc:Bool, noLang:Bool, rep:Bool, country:String, compression:String, nods:Bool)
 	{
 		FLAG_DEL_SOURCE = delSrc;
+		
+		if (P_ACTION != EngineAction.BUILD)
+		{
+			FLAG_DEL_SOURCE = false; // Safety
+		}
+		
 		FLAG_REMOVE_LANG = noLang;
 		FLAG_NODS = nods;
 		
@@ -254,8 +263,6 @@ class Engine
 			{
 				throw 'Cannot create Report File "$report_file"';
 			}
-			
-			
 		}
 		
 		if ((P_COMPRESSION = compression) != null) 

@@ -4,7 +4,7 @@
 **Author:** John Dimi :computer:, <johndimi@outlook (.) com> *twitter*: [@jondmt](https://twitter.com/jondmt)  
 **Project Page and Sources:** [https://github.com/johndimi/romdj](https://github.com/johndimi/romdj)  
 **Language:** HAXE compiled to Node.js  
-**Version:** 0.2 **Platform:** Windows Terminal  
+**Version:** 0.2.1 **Platform:** Windows Terminal  
 
 
 ## :mega: What is it
@@ -23,19 +23,15 @@
 
 ![Run Example](media/demorun1.gif)  
 
-**More Features / How it works**
+**More Details**
 
 - Runs on **NodeJS**, built with **HAXE** *(https://haxe.org)*.
-
 - It uses `stdio` pipes for all archive operations so **no temp files** are created anywhere.
-
 - Can process each input file in **parallel**, so the more threads the faster *(set with parameter -p)*.
-
 - :star: Supports skipping the header portion on files *(Works with the NES no-intro set)*
-
 - Supports reading archives with **multiple roms** inside them.
-
 - Scans all files in an input dir *(except common extensions, like images and executables)*, and **checks file checksum** against the database, so it can **identify rom files** no matter their name or extension.
+- :exclamation: Currently **does not support** processing .dat files with entries with more than one file. (*e.g. PSP* )
 
 ![visual example](media/file_example.png)  
 > Visual Example: Rom files will be identified, and then created with proper names to a format of your choice *(zip,7z or raw)*
@@ -138,11 +134,16 @@ To properly check against some no-intro sets, the header part of the rom needs t
 > In my knowledge, the **NES** no-intro set is without headers. The NES rom header is 16 bytes so you need to pass `-header 16` when working with NES roms.
 
 
+
+
 ## :paperclip: NOTES
 
-This is a first release, and even though I tested for bugs and possible errors, some might have slipped, if you encounter anything not working right, please let me know ! 
-
+This is a first release, and even though I tested for bugs and possible errors, some might have slipped, if you encounter anything not working right, please let me know !  
 Also feel free to give feedback and make suggestions on how this program could be improved.
+
+**FUTURE PLANS**
+
+- Support for multiple files per Entry
 
 ----
 

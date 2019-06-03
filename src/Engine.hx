@@ -354,7 +354,7 @@ class Engine
 				restoreAndClear(2);
 				print('>> |1|Processing| : (|4|$c / ${info_total_files}|) :');
 				T.print(p0); ProgressBar.print(40, progress);
-				P.print1('${p0}${info_verb} ({2}) , No Match ({3})  ', [Std.string(arProc.length), Std.string(arUnmatch.length) ]);
+				P.print1('\n${p0}${info_verb} ({2}) , No Match ({3})  ', [Std.string(arProc.length), Std.string(arUnmatch.length) ]);
 			}
 		});
 

@@ -28,14 +28,17 @@ enum EngineAction {
 @:allow(com.Worker)
 class Engine 
 {
-	
-	public static final VERSION = '0.2.1';
+	// Program Version
+	public static final VERSION = '0.3';
 	
 	// Valid Archive Extensions that can be Read from the engine
 	static final ARCHIVE_EXT:Array<String> = ['.zip', '.7z']; // (keep lowercase)
 	
-	// Default string for Priority Countries for the '-country' parameter
-	static final DEF_COUNTRY = "EUROPE,USA";
+	// Default string for Priority Countries for the '-regkeep' parameter
+	static final DEF_REG_KEEP = "EUROPE,USA";
+	
+	// Default string for when Deleting Country for the '-regdel' parameter
+	static final DEF_REG_DEL = "EUROPE,USA,WORLD";
 	
 	// Line length
 	static final LINE = 45;
@@ -77,8 +80,8 @@ class Engine
 	
 	// Source folder where the ROMS are
 	public static var P_SOURCE:String;
-	// Target folder for ROM BUILD
 	
+	// Target folder for ROM BUILD
 	public static var P_TARGET:String;
 	
 	// Global compression Settings for roms put to target folder (RAW,ZIP,7Z)
@@ -95,7 +98,10 @@ class Engine
 	public static var P_HEADER_SKIP:Int = 0;
 	
 	// TRUE: Condense/Prioritize the Countries. Uses vars in (COUNTRY_AR)
-	public static var FLAG_FIX_COUNTRY:Bool;
+	public static var FLAG_REG_PRIORITY:Bool;
+
+	// TRUE: Remove Country codes. Uses vars in (COUNTRY_AR)
+	public static var FLAG_REG_REMOVE:Bool;	
 	
 	// TRUE: Remove Language Strings when Building
 	public static var FLAG_REMOVE_LANG:Bool;
@@ -114,7 +120,7 @@ class Engine
 	//====================================================;
 	
 	// <Compiled> Parameter Objects
-	// Custom Priority Countries Array, Set in P_SET()
+	// Custom Countries Array, Set in P_SET()
 	static var COUNTRY_AR:Array<String> = null;
 	
 	// <Compiled> Compression Array, Set in P_SET()
@@ -131,7 +137,6 @@ class Engine
 	
 	static var info_total_files:Int;
 	
-	// 
 	static var info_verb:String;
 	
 	// The main DAT object holding the Dat Entries
@@ -179,7 +184,6 @@ class Engine
 	public static function init(_action:String, _datPath:String, _sourcePath:String = null, _targetPath:String = null):Void
 	{
 		if (isInited) return; isInited = true;
-
 		
 		T = BaseApp.TERMINAL;
 		report = [];
@@ -233,7 +237,14 @@ class Engine
 		- Also sets defaults
 		@throws String Error
 	**/
-	public static function P_SET(delSrc:Bool, noLang:Bool, rep:Bool, country:String, compression:String, nods:Bool)
+	public static function P_SET(
+		delSrc:Bool, 
+		noLang:Bool, 
+		rep:Bool, 
+		country:String, 
+		countryDel:String,
+		compression:String, 
+		nods:Bool)
 	{
 		FLAG_DEL_SOURCE = delSrc;
 		
@@ -277,12 +288,27 @@ class Engine
 		}
 		
 		if (country == null){
-			FLAG_FIX_COUNTRY = false;
+			FLAG_REG_PRIORITY = false;
 		}else{
-			FLAG_FIX_COUNTRY = true;
+			FLAG_REG_PRIORITY = true;
+			// This is when the user forgot to pass a parameter and it is parsing the next program option
+			// e.g. "-regkeep -c ZIP:0" ==> `-c` will become the parameter which is wrong
 			if (country.charAt(0) == "-") throw "Expecting Valid Country String or `=` for default";
-			if (country == '=') country = DEF_COUNTRY;
+			if (country == '=') country = DEF_REG_KEEP;
 			COUNTRY_AR = country.toUpperCase().split(',');
+		}
+		
+		if (countryDel == null)
+		{
+			FLAG_REG_REMOVE = false;
+		}else{
+			if (FLAG_REG_PRIORITY){
+				throw "You can either set `regkeep` or `regdel`. Not both";
+			}
+			FLAG_REG_REMOVE = true;
+			if (countryDel.charAt(0) == "-") throw "Expecting Valid Country String or `=` for default";
+			if (countryDel == '=') countryDel = DEF_REG_DEL;
+			COUNTRY_AR = countryDel.toUpperCase().split(',');
 		}
 		
 	}//---------------------------------------------------;
@@ -448,7 +474,8 @@ class Engine
 		if (FLAG_DEL_SOURCE) fl += "|1|Delete Source| | ";
 		if (FLAG_REP) fl += "|1|Report| | ";
 		if (FLAG_REMOVE_LANG) fl += "|1|Remove Languages| | ";
-		if (FLAG_FIX_COUNTRY) fl += "|1|Country Priority| : |4|" + COUNTRY_AR.toString() + "| | ";
+		if (FLAG_REG_PRIORITY) fl += "|1|Country Priority| : |4|" + COUNTRY_AR.toString() + "| | ";
+		else if (FLAG_REG_REMOVE) fl += "|1|Remove Country| : |4|" + COUNTRY_AR.toString() + "| | ";
 		
 		if (fl.length > 0)
 		{
@@ -650,37 +677,49 @@ class Engine
 	public static function apply_NameFilters(s:String):String
 	{
 		// Create new name based on filters (if any)
-		if(FLAG_FIX_COUNTRY)
-			s = str_prioritizeCountry(s, COUNTRY_AR);
-		if (FLAG_REMOVE_LANG){
+		if(FLAG_REG_PRIORITY)
+			s = str_countryKeepRemove(s, COUNTRY_AR, true);
+		else if (FLAG_REG_REMOVE)
+			s = str_countryKeepRemove(s, COUNTRY_AR, false);
+		
+		if (FLAG_REMOVE_LANG)
 			s = str_noLanguage(s);
-		}
+		
 		// Just in case, remove trailing spaces
 		s = StringTools.rtrim(s);
+		
 		return s;
 	}//---------------------------------------------------;
 		
 	
 	
 	/**
-	   Prioritize Country Codes
-	   Changes a string to only include country codes of your choosing.
-	   ! Only if there are multiple country codes
-	   ! Single country codes or if no prioritized country codes, No change.
+	   Remove/Prioritize Countries from a string
 	   ! Don't forget UPPERCASE Custom Countries
 	   
-	   e.g. (with the keeping [USA,EUROPE])
-	    (USA, Europe, Brazil) => (USA, Europe)
-		(USA, Europe) => (USA, Europe)
-		(USA) => (USA)
-		(Brazil, Korea) => (Brazil, Korea)
-		(Brazil, Korea, Europe) => (Europe)	     
+	   [KEEP/PRIORITIZE]
+	    - Will keep declared and remove other countries present
+		- If no declared countries present, does nothing
+		
+	   	   e.g. (with the keeping [USA,EUROPE])
+				(USA, Europe, Brazil) => (USA, Europe)
+				(USA, Europe) => (USA, Europe)
+				(USA) => (USA)
+				(Brazil, Korea) => (Brazil, Korea)
+				(Brazil, Korea, Europe) => (Europe)	   
+			   
+	   [REMOVE/ !KEEP]
+	    - Will remove all declared countries from the string
+		
+			e.g. 'Alladin (EUROPE,USA)" , [EUROPE,USA] ==> 'Alladin'
+				 'Alladin (EUROPE,USA,BRAZIL)" , [EUROPE,USA] ==> 'Alladin (Brazil)'
 	   
 	   @param	s String to apply to, Usually ROM name
-	   @param	COUNT Countries to Prioritize, !UPPERCASE! Default = [USA,EUROPE]
-	   @return  Formatted String
+	   @param	COUNT Countries Array !UPPERCASE!
+	   @param	KEEP TRUE to [Prioritize] FALSE to [Delete]
+	   @return  Result String
 	**/
-	public static function str_prioritizeCountry(s:String, COUNT:Array<String>):String
+	public static function str_countryKeepRemove(s:String, COUNT:Array<String>, KEEP:Bool = true):String
 	{
 		var strb = COUNT.join('|');
 		var r = new EReg('\\([^\\)]*($strb).*?\\)', 'i');
@@ -688,22 +727,27 @@ class Engine
 			var c = r.matched(0);
 				c = c.substr(1, c.length - 2); // Remove ( and )
 			var C = c.split(',');
-			if (C.length == 0) return s; // No Two Countries there
+			
+			if (KEEP && C.length == 0) return s; // No 2+ countries, so no need to exlude anything
+			
 			var i = C.length - 1;
 			while (i >= 0) {
 				C[i] = StringTools.trim(C[i]);
 				// traverse backwards, so i can delete elements
-				if (COUNT.indexOf(C[i].toUpperCase()) < 0) C.splice(i, 1);
+				if(KEEP){
+					if (COUNT.indexOf(C[i].toUpperCase()) < 0) C.splice(i, 1);
+				}else{
+					if (COUNT.indexOf(C[i].toUpperCase()) >= 0) C.splice(i, 1);
+				}
 				i--;
 			}
-			
-			var b = C.join(', ');
-			s = r.replace(s, '($b)');
+			var rep:String = (C.length > 0)?('(' + C.join(', ') + ')'):'';
+			s = r.replace(s, rep);
 		}
 		
 		return s;
+		
 	}//---------------------------------------------------;
-	
 	
 	/**
 	   Removes Language Codes from a String

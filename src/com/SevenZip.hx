@@ -181,8 +181,7 @@ class SevenZip extends Archiver
 		
 		var p:Array<String> = [
 			'a', 						// Add
-			'-bsp1', 					// Redirect PROGRESS outout to STDOUT
-			'-mmt' 						// Multithreaded
+			'-bsp1' 					// Redirect PROGRESS outout to STDOUT
 		];
 		if (cs != null) p = p.concat(cs.split(' '));
 		p.push(archive);
@@ -210,7 +209,6 @@ class SevenZip extends Archiver
 			'e',			// Extract
 			archive,
 			'-bsp1',		// Progress in stdout
-			'-mmt',			// Multithread
 			'-aoa',			// Overwrite
 			'-o$output'		// Target folder. DEV: Does not need "" works with spaces just fine
 		];
@@ -361,7 +359,7 @@ class SevenZip extends Archiver
 	{
 		prepNoLog();
 		var p:Array<String> = [
-			'e', '-mmt', arc
+			'e', arc
 		];
 		var _inf = "";
 		if (file == null) {
@@ -380,6 +378,7 @@ class SevenZip extends Archiver
 	/**
 	   Compresses from STDIN stream.
 	   Updates Archive, It will APPEND files, so be careful
+	   ! COMPRESSED_SIZE available after
 	   @param	arc Archive Path to create
 	   @param	fname name of the file to be created inside the archive
 	   @param	cs Valid Compression String
@@ -388,12 +387,31 @@ class SevenZip extends Archiver
 	public function compressFromPipe(arc:String, fname:String, cs:String = null):IWritable
 	{
 		var p:Array<String> = [
-			'a', arc, '-mmt'
+			'a', arc
 		];
 		if (cs != null) p = p.concat(cs.split(' '));
 		p.push('-si${fname}');
 		if (!FLAG_LOG_QUIET)
 		LOG.log('Compressing from PIPE to "$arc" ... Compression:$cs' );
+		
+		COMPRESSED_SIZE  = 0;// Zero it out because I'll check it later for 0
+		
+		extraClose = ()->
+		{
+			var r = ~/Archive size: (\d+)/;
+			if (r.match(app.stdOutLog)){
+				COMPRESSED_SIZE = Std.parseFloat(r.matched(1));
+				if (!FLAG_LOG_QUIET)
+					LOG.log('$ARCHIVE_PATH Compressed size = $COMPRESSED_SIZE');
+			}
+			// Either got match, or no match will enter this:
+			if (COMPRESSED_SIZE == 0) {
+				onComplete = null;
+				ERROR = 'Could not write data to "$arc"';
+				if (onFail != null) onFail(ERROR);
+			}			
+		};
+		
 		app.start(p);
 		return app.proc.stdin;
 	}//---------------------------------------------------;

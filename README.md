@@ -4,7 +4,7 @@
 **Author:** John Dimi :computer:, <johndimi@outlook (.) com> *twitter*: [@jondmt](https://twitter.com/jondmt)  
 **Project Page and Sources:** [https://github.com/johndimi/romdj](https://github.com/johndimi/romdj)  
 **Language:** HAXE compiled to Node.js  
-**Version:** 0.2.1 **Platform:** Windows Terminal  
+**Version:** 0.3 **Platform:** Windows Terminal  
 
 
 ## :mega: What is it
@@ -58,6 +58,7 @@ Currently there are **(2)** **operations** romdj can perform :
 :wrench:**BUILD** a Rom Set `build`  
 You need to also specify an **input dir** where rom files are for the system the .dat file describes  
 , and you need to specify an **output dir**, where the new rom files will be created  
+
 > Set input dir with `-i`  , Set output dir with `-o`  
 > **e.g.** `romdj build c:\dats\nintendo.dat -i c:\games\nintendo_random -o c:\games\nintendo_fixed`
 
@@ -67,54 +68,63 @@ This operation just needs an **input folder** `-i` to be set. The program will s
 > **e.g.** `romdj scan c:\dats\nintendo.dat -i c:\games\nintendo_random`
 
 ### :hammer:**Parameters**  
-You can customize the process by declaring some extra parameters:
+You can customize the process by declaring some extra parameters:  
 
-- **Compression** `-c ARCHIVER : LEVEL`  
+- **Compression** `-c ARCHIVER : LEVEL`   
   Build the roms inside an archive, Supported formats : **zip, 7zip**  
   `ARCHIVER` : `7Z` or `ZIP` ,  
   `LEVEL` : `0-9` *(0 is low compression, faster, 9 is best compression slower)*  
   
   > **e.g.**  
   > `-c ZIP:9` => Compress roms to a ZIP with maximum compression  
-  > `-c 7Z:0` => Compress roms to a 7zip with lowest compression
+  > `-c 7Z:0` => Compress roms to a 7zip with lowest compression  
+  > `without -c option` => Builds roms to their native extension (e.g. `.gb`)
 
 - **Delete Source** `-delsrc`  
   On build operation, will delete the source files after they have been created to target dir.  
   
-> :point_right: If source file is archive with multiple files. It will only be deleted if all of its included files were built
-
+  > :point_right: If source file is archive with multiple files. It will only be deleted if all of its included files were built
+  
 - **Create Report File** `-report`  
   After the process completes,  this will create a `.txt` report file with more detailed information on the operations. *(List of files copied, duplicates, read errors, skipped, etc )*   
-  
-> :point_right:  The report file is auto-named based on date. On `build` it will be created on the target folder On `scan` it will be created on the source folder.
+
+  > :point_right:  The report file is auto-named based on date. On `build` it will be created on the target folder On `scan` it will be created on the source folder.
 
 - **Parallel Tasks** `-p NUM`  
   `NUM`: Number of maximum parallel tasks. From 1 and up. *(If not set default = 2)*   
-  
-> :warning: Don't set this higher than the number of your physical cores.
 
-- **Filter: Prioritize Countries** `-country X,Y,Z`  
+  > :warning: Don't set this higher than the number of your physical cores.
+
+- **Filter: Prioritize Countries (Region Keep)** `-regkeep X,Y,Z`  
   `X,Y,Z`: Country Codes to prioritize/keep on the filenames. Comma Separated Values.  
-  Country codes not declared will be removed from the filename if they are along with a country you set, else if not along a country you set, they will be kept.  
+  Country codes not declared will be removed from the filename **only if** a country you set is present.
+  You can use `=` as a parameter to use the defaults `EUROPE,USA`  
   
->:point_down: More examples on how this works further below  
-
+  > :point_down: *More examples on how this works further below*  
+  
+- **:star: (NEW) Filter: Remove Countries (Region Delete)** `-regdel X,Y,Z`   
+  `X,Y,Z`: Country Codes to prioritize/keep on the filenames. Comma Separated Values.  
+  You can use `=` as a parameter to use the defaults `EUROPE,USA,WORLD`   
+  
+  > e.g.`-regdel EUROPE` ➡ ` "Aladdin (EUROPE,USA)"` ➡`Aladdin (USA)`
+  
 - **Remove Language Codes** `-nolang`  
   Removes language codes from the filenames.   
+
   > e.g. `"World Cup USA 94 (Europe, Brazil) (En,Fr,De,Es,It,Nl,Sv)"` ➡  
   > `"World Cup USA 94 (Europe, Brazil)"`
 
 - **Skip Header** `-header N`  
   Skip `N` bytes from the beginning of the files when checking for checksums.   
-  
-> :point_down: Check below for more info
+
+  > :point_down: *Check below for more info*
 
 - **No Deep Scan** `-nods`  
   Do not scan subfolders in the <input> folder. It can be useful sometimes.
 
 ----
 
-### :baby_chick: Prioritize Country Codes
+### :baby_chick: Prioritize Country Codes `-regkeep`
 
 Some no-intro rom names include multiple countries, like *"Action Fighter (USA, Europe, Brazil) (Rev 1)"*  
 You can use the `-country` parameter to remove unwanted country codes from the name.  
@@ -124,8 +134,7 @@ If a prioritized country doesn't exist in the name, then nothing is changed
 You can use multiple country codes (comma separated)  
 `-country europe,usa` and it will keep all of the declared countries  
 `-country europe,brazil : "Game (Europe,Usa,Brazil,Australia) == "Game (Europe,Brazil)"`  
-You can use `=` to use the default country codes (Europe,USA)  
-`-country =` is the same as `-country europe,usa`  
+You can use `=` to use the default country codes `Europe,USA`
 
 ### :baby_chick: Skipping Header bytes
 
@@ -144,6 +153,7 @@ Also feel free to give feedback and make suggestions on how this program could b
 **FUTURE PLANS**
 
 - Support for multiple files per Entry
+- Linux
 
 ----
 

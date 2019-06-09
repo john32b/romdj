@@ -44,6 +44,9 @@ class Worker implements ISendingProgress
 	
 	var action_match:(DatEntry, ?String, Void->Void)->Void;
 	
+	// Was forcekill called?
+	var _forceKill:Bool = false;
+	
 	public static var COUNTER:Int = 0;
 	
 	// --
@@ -69,6 +72,7 @@ class Worker implements ISendingProgress
 	// -- Called on Self Fail or Job Fail
 	public function forcekill()
 	{
+		_forceKill = true;
 		log('Worker FORCE_KILL : $src');
 		if (_fk != null) _fk();
 	}//---------------------------------------------------;
@@ -161,6 +165,7 @@ class Worker implements ISendingProgress
 				S.onFail = onFail;
 			// Dev: I don't care where or how, as long as it is a stream I need to process it
 			var ws = S.getHashPipe("CRC32", (hash)->{
+				if (_forceKill) return;
 				var entry = Engine.DAT.DB.get(hash);
 				if (entry != null) {					
 					romsMatched++;
@@ -176,7 +181,6 @@ class Worker implements ISendingProgress
 		
 		doNext();
 	}//---------------------------------------------------;
-	
 	
 	
 	
@@ -197,10 +201,6 @@ class Worker implements ISendingProgress
 		var romFilename = name_fixed + Engine.DAT.EXT;
 		var targetFile = '${Engine.P_TARGET}/${name_fixed}'; // NO EXT YET
 		
-		var endOK = function(){
-			arReport(Engine.arProc, e.name, arcPath);
-			end();
-		};
 			
 		// - Get target file and check if it exists
 		targetFile += Engine.getCompressionExt();
@@ -218,6 +218,12 @@ class Worker implements ISendingProgress
 			S.onFail = onFail;
 			
 		var _ws:WriteStream;
+	
+		// --
+		var endOK = function(){
+			arReport(Engine.arProc, e.name, arcPath);
+			end();
+		};
 		
 		// Called automatically on fail or force kill
 		// --
@@ -226,7 +232,9 @@ class Worker implements ISendingProgress
 			if (_ws != null) {
 				_ws.removeAllListeners();
 				_ws.end();
+				_ws = null;
 			}
+			
 			// I am deleting the target file as it may be incomplete
 			try{
 				Fs.unlinkSync(targetFile);
@@ -275,7 +283,6 @@ class Worker implements ISendingProgress
 				// <From Raw File>
 				var rs = Fs.createReadStream(src);
 				rs.pipe(ws);
-				
 			}else{	
 				// <From inside an archive>
 				var S2 = new SevenZip();

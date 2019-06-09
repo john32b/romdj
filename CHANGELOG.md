@@ -1,6 +1,12 @@
 ## `romdj` Changelog
 
 
+### V0.3
+	- Renamed option `country` to `regkeep` (Region Keep)
+	- Added option `regdel` (Region Delete)
+	- When no more diskspace when building program will end gracefully
+	- SevenZip, removed `-mmt` parameter as it is on by default
+
 ### v0.2.1
 	- Added warning when loading dat files with multiple roms per entry
 

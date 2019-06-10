@@ -1,5 +1,7 @@
 ## `romdj` Changelog
 
+### v0.3.1
+	- Bugfix, when using `nolang` or `regdel` sometimes it resulted in double spaces in filename
 
 ### V0.3
 	- Renamed option `country` to `regkeep` (Region Keep)

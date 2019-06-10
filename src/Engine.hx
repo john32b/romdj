@@ -35,10 +35,10 @@ class Engine
 	static final ARCHIVE_EXT:Array<String> = ['.zip', '.7z']; // (keep lowercase)
 	
 	// Default string for Priority Countries for the '-regkeep' parameter
-	static final DEF_REG_KEEP = "EUROPE,USA";
+	public static final DEF_REG_KEEP = "EUROPE,USA";
 	
 	// Default string for when Deleting Country for the '-regdel' parameter
-	static final DEF_REG_DEL = "EUROPE,USA,WORLD";
+	public static final DEF_REG_DEL = "EUROPE,USA,WORLD";
 	
 	// Line length
 	static final LINE = 45;
@@ -741,12 +741,15 @@ class Engine
 				}
 				i--;
 			}
-			var rep:String = (C.length > 0)?('(' + C.join(', ') + ')'):'';
-			s = r.replace(s, rep);
+			
+			if (C.length > 0) {
+				return r.replace(s, '(' + C.join(', ') + ')');
+			}else {
+				return combineStrings(r.matchedLeft() , r.matchedRight());
+			}
 		}
-		
-		return s;
-		
+		// No match:
+		return s; 
 	}//---------------------------------------------------;
 	
 	/**
@@ -762,12 +765,27 @@ class Engine
 		var r = ~/\((En|Fr|De|Es|It|Nl|Pt|Sv).*?\)/;
 		if (r.match(s))
 		{
-			return r.replace(s, "");
+			return combineStrings(r.matchedLeft() , r.matchedRight());
 		}
 		
 		return s;
 	}//---------------------------------------------------;
 
+	/**
+	   Clever Combine two strings. If the joint is a double space, it gets removed
+	   @param	a
+	   @param	b
+	   @return
+	**/
+	static function combineStrings(a:String, b:String):String
+	{
+		if ( (a.charAt(a.length - 1) == " ") && (b.charAt(0) == " ") )
+			return a.substr(0, -1) + b;
+			
+		return a + b;
+	}//---------------------------------------------------;
+	
+	
 	
 	/**
 	   -- Fetched from CDCRUSH project

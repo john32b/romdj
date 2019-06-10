@@ -46,8 +46,8 @@ class Main extends BaseApp
 			['c', 'If set will apply Compression to the roms when Building', 'Type = [ZIP,7Z], Compression Level = [0...9]\ne.g. "ZIP:9", "7z:4", "ZIP"', 'yes'],
 			['delsrc','Delete Source Files after Building', 'In case of archives with multiple files, will delete it when all included files were built'],
 			['nolang', 'Remove Language Strings from Filenames', 'e.g. (En,Fr,Es,De), etc will be removed from the rom names'],
-			['regkeep', 'Prioritize Country Codes in Filenames', 'Removes unwanted redundant countries from the Filenames.\nCSV values, = for defaults (USA,EUROPE) e.g. -regkeep BRAZIL,USA\nCheck the readme for more details on how this works', 'yes'],
-			['regdel', 'Remove these country codes from the filenames','CSV values, = for defaults (USA,EUROPE) e.g. -regdel USA\nCheck the readme for more details on how this works', 'yes'],
+			['regkeep', 'Prioritize Country Codes in Filenames', 'Removes unwanted redundant countries from the Filenames.\nCSV values, = for defaults (${Engine.DEF_REG_KEEP}) e.g. -regkeep BRAZIL,USA\nCheck the readme for more details on how this works', 'yes'],
+			['regdel', 'Remove these country codes from the filenames','CSV values, = for defaults (${Engine.DEF_REG_DEL}) e.g. -regdel USA\nCheck the readme for more details on how this works', 'yes'],
 			
 			['report', 'Produce detailed Report. on Build the file will be created on <target>', 'On <scan> the file will be created on <source>'],
 			

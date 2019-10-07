@@ -102,8 +102,8 @@ You can customize the process by declaring some extra parameters:
   
   > :point_down: *More examples on how this works further below*  
   
-- **:star: (NEW) Filter: Remove Countries (Region Delete)** `-regdel X,Y,Z`   
-  `X,Y,Z`: Country Codes to prioritize/keep on the filenames. Comma Separated Values.  
+- **:star: Filter: Remove Countries (Region Delete)** `-regdel X,Y,Z`   
+  `X,Y,Z`: Country Codes to remove from the filenames. Comma Separated Values.  
   You can use `=` as a parameter to use the defaults `EUROPE,USA,WORLD`   
   
   > e.g.`-regdel EUROPE` ➡ ` "Aladdin (EUROPE,USA)"` ➡`Aladdin (USA)`
@@ -127,14 +127,17 @@ You can customize the process by declaring some extra parameters:
 ### :baby_chick: Prioritize Country Codes `-regkeep`
 
 Some no-intro rom names include multiple countries, like *"Action Fighter (USA, Europe, Brazil) (Rev 1)"*  
-You can use the `-country` parameter to remove unwanted country codes from the name.  
-`-country europe : "Game (Europe,USA,Australia)" == "Game (Europe)"`  
+You can use the `-regkeep` parameter to keep desired codes while removing unwanted country codes from the name.   
+`-regkeep europe : "Game (Europe,USA,Australia)" == "Game (Europe)"`  
 If a prioritized country doesn't exist in the name, then nothing is changed  
-`-country europe : "Game (Korea)" == "Game (Korea)"`  
+`-regkeep europe : "Game (Korea)" == "Game (Korea)"`  
 You can use multiple country codes (comma separated)  
-`-country europe,usa` and it will keep all of the declared countries  
-`-country europe,brazil : "Game (Europe,Usa,Brazil,Australia) == "Game (Europe,Brazil)"`  
-You can use `=` to use the default country codes `Europe,USA`
+`-regkeep europe,usa` to keep all of the declared countries  
+`-regkeep europe,brazil ➡ "Game (Europe,Usa,Brazil,Australia) ➡ "Game (Europe,Brazil)"`  
+You can use `=` to use the default country codes `Europe,USA`  
+
+> :grey_exclamation: You can also use `-regdel` to force remove country codes from filenames
+
 
 ### :baby_chick: Skipping Header bytes
 

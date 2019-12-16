@@ -21,43 +21,43 @@ typedef DatEntry = {
 
 /**
  * Represents a DAT-O-MATIC Dat File
- * 
+ *
  *  - Get DATS from `https://datomatic.no-intro.org`
  * 	- Loads a DAT file and creates a DB
- * 
+ *
  */
-class DatFile 
+class DatFile
 {
 	/**
-	   name,description,version,author,homepage,url 
+	   name,description,version,author,homepage,url
 	**/
 	public var HEADER:Map<String,String>;
-	
+
 	/**
 	   CRC32 => Entry
 	   DEV: I am using CRC32 for lookups for quick lookup based on it **/
 	public var DB:Map<String,DatEntry>;
-	
+
 	/** Number of entries */
 	public var count:Int = 0;
-	
+
 	/** Guessed Romset Extension (lowercase) e.g `.sms` , `.gb` */
-	public var EXT:String; 
-	
+	public var EXT:String;
+
 	// The path of the DAT file loaded
 	public var fileLoaded:String = "";
-	
+
 	// Object and Header info
 	public var info:Array<String>;
 
 	//====================================================;
-	
-	public function new(?file:String) 
+
+	public function new(?file:String)
 	{
 		if (file != null) load(file);
 	}//---------------------------------------------------;
-	
-	
+
+
 	/**
 	   Load a DAT file and fill DB
 	   @throws String Errors
@@ -66,83 +66,79 @@ class DatFile
 	{
 		reset();
 		fileLoaded = file;
-		
+
 		var con:String = try Fs.readFileSync(file, {encoding:'utf8'}) catch (e:Dynamic) throw 'Cannot read file `$file`';
-		
+
 		try{
-			
+
 		var ac = try new Access(Xml.parse(con).firstElement());
 
 		var n_header = ac.node.resolve('header');
 		ac.x.removeChild(n_header.x);
-		
+
 		info.push('== DatFile Object');
 		info.push('> Loaded File : $file');
 		info.push('> HEADER : ');
-		
+
 		for (i in n_header.elements) {
 			try{
 				HEADER[i.name] = i.innerData;
 				info.push('\t${i.name} : ${i.innerData}');
 			}catch (e:Dynamic){ }
 		}
-		
-		for (i in ac.elements) 
+
+		for (i in ac.elements)
 		{
 			count++;
 			var _d = i.node.description;	// Alternative to `i.node.resolve('description');`
 			var _r = i.nodes.rom;
-			
-			if (_r.length > 1)
-			{
-				throw 'DAT File Error, Multiple Roms per Entry, is NOT SUPPORTED yet';
-			}			
-			
-			var rom = _r[0];
-			
-			var f:DatEntry = {
-				name:i.att.name,
-				description:_d.innerData,
-				romname:rom.att.name,
-				md5:rom.att.md5,
-				crc:rom.att.crc,
-				size:Std.parseInt(rom.att.size),
-				status:rom.x.exists('status')?rom.att.status:"-"
-			};
-			DB.set(f.crc, f);
+
+			for (rom in _r) {
+				var f:DatEntry = {
+					name:i.att.name,
+					description:_d.innerData,
+					romname:rom.att.name,
+					md5:rom.att.md5,
+					crc:rom.att.crc,
+					size:Std.parseInt(rom.att.size),
+					status:rom.x.exists('status')?rom.att.status:"-"
+				};
+
+				DB.set(f.crc, f);
+			}
 		}
-		
+
 		if (count == 0)
 		{
 			throw 'DAT file `$file` found 0 entries';
 		}
-		
+
 		// -
-		for (i in DB) 
+		for (i in DB)
 		{
 			EXT = Path.extname(i.romname).toLowerCase();
 			break;
 		}
-		
+
 		info.push('> Found (${count}) Entries');
 		info.push('> Rom Extension : $EXT');
 		info.push('------');
-		
+
 		}catch (e:Error) {
 			LOG.log(e.message);
-			throw 'Cannot parse DAT file `$file`'; 
+			throw 'Cannot parse DAT file `$file`';
 		}
 		catch (e:String) {
 			LOG.log(e);
 			throw e;
 		}
-		
+
 		for (i in info)
 		{
 			LOG.log(i);
 		}
 	}//---------------------------------------------------;
-	
+
 	function reset()
 	{
 		HEADER = [];
@@ -152,7 +148,7 @@ class DatFile
 		fileLoaded = "";
 		EXT = "";
 	}//---------------------------------------------------;
-	
+
 }// --
 
 
@@ -182,7 +178,7 @@ class DatFile
 	.
 	.
 	.
-	
+
 </datafile>
 
 

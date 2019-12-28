@@ -1,10 +1,8 @@
 package;
 
-import com.SevenZip;
 import djNode.BaseApp;
 import djNode.task.CJob;
 import djNode.tools.LOG;
-import js.node.Fs;
 
 class Main extends BaseApp
 {
@@ -17,6 +15,7 @@ class Main extends BaseApp
 		CJob.FLAG_LOG_TASKS = false;
 		
 		#if debug
+			LOG.pipeTrace();
 			LOG.setLogFile("a:\\log_romdj.txt");
 		#end 
 		
@@ -49,7 +48,7 @@ class Main extends BaseApp
 			['regkeep', 'Prioritize Country Codes in Filenames', 'Removes unwanted redundant countries from the Filenames.\nCSV values, = for defaults (${Engine.DEF_REG_KEEP}) e.g. -regkeep BRAZIL,USA\nCheck the readme for more details on how this works', 'yes'],
 			['regdel', 'Remove these Country Codes from the filenames','CSV values, = for defaults (${Engine.DEF_REG_DEL}) e.g. -regdel USA', 'yes'],
 			
-			['report', 'Produce detailed Report. on Build the file will be created on <target>', 'On <scan> the file will be created on <source>'],
+			['report', 'Produce detailed Report. on <Build> the file will be created at <target>', 'On <SCAN> the file will be created at <source>'],
 			
 			['header', 'Skip this many bytes from the beginning of the files when checking checksums', 'Useful in some romsets, like the NES which has a 16 byte header', 'yes'],
 			['nods'  , 'No Deep Scan','Don\'t scan subfolders in the input folder'],
@@ -68,7 +67,7 @@ class Main extends BaseApp
 	override function onStart() 
 	{
 		printBanner();
-		
+
 		try 
 		{
 			// Init engine with input,output, datfile

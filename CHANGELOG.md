@@ -1,5 +1,9 @@
 ## `romdj` Changelog
 
+### v0.3.2
+	- Preliminary support for entries with multiple files. Currently cannot build roms from multiroms, but the program will acknowledge and report them.
+	- Fixed rom extension naming when building. Every rom extension will be read correctly from the entry data.
+	
 ### v0.3.1
 	- Bugfix, when using `nolang` or `regdel` sometimes it resulted in double spaces in filename
 

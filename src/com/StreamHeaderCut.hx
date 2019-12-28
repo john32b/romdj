@@ -1,9 +1,8 @@
 package com;
 
 import haxe.extern.EitherType;
-import js.Error;
+import js.lib.Error;
 import js.node.Buffer;
-import js.node.readline.Interface.InterfaceEvent;
 import js.node.stream.Transform;
 
 
@@ -30,7 +29,7 @@ class StreamHeaderCut<T:Transform<T>> extends js.node.stream.Transform<T>
 		super(null);
 	}//---------------------------------------------------;
 	
-	override function _transform(chunk:Buffer, encoding:String, callback:js.Error->EitherType<String, Buffer>->Void):Void 
+	override function _transform(chunk:Buffer, encoding:String, callback:js.lib.Error->EitherType<String, Buffer>->Void):Void 
 	{
 		if (!done)
 		{

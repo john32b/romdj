@@ -1,6 +1,6 @@
 package;
 import com.DatFile;
-import com.SevenZip;
+import djNode.app.SevenZip;
 import com.Worker;
 import djNode.BaseApp;
 import djNode.Terminal;
@@ -9,7 +9,7 @@ import djNode.task.CTask;
 import djNode.tools.FileTool;
 import djNode.utils.Print2;
 import djNode.utils.ProgressBar;
-import js.Error;
+import js.lib.Error;
 import js.node.Fs;
 import js.node.Os;
 import js.node.Path;
@@ -29,7 +29,7 @@ enum EngineAction {
 class Engine 
 {
 	// Program Version
-	public static final VERSION = '0.3';
+	public static final VERSION = '0.3.2';
 	
 	// Valid Archive Extensions that can be Read from the engine
 	static final ARCHIVE_EXT:Array<String> = ['.zip', '.7z']; // (keep lowercase)
@@ -40,7 +40,7 @@ class Engine
 	// Default string for when Deleting Country for the '-regdel' parameter
 	public static final DEF_REG_DEL = "EUROPE,USA,WORLD";
 	
-	// Line length
+	// Decorative Line length
 	static final LINE = 45;
 	
 	// Pre String to all Terminal Prints
@@ -115,6 +115,7 @@ class Engine
 	// TRUE: Will produce log at target dir
 	public static var FLAG_REP:Bool;
 	
+	// TRUE: Don't scan subdirectories
 	public static var FLAG_NODS:Bool;
 	
 	//====================================================;
@@ -150,6 +151,9 @@ class Engine
 	
 	// The rom files on the source folder
 	static var arFiles:Array<String>;
+
+	// Hold files that are part of a multirom entry
+	static var arMultiRoms:Array<String>;
 	
 	// Hold files that were unmatched
 	static var arUnmatch:Array<String>;
@@ -171,6 +175,7 @@ class Engine
 	static var arMissing:Array<String>;
 	
 	static var T:Terminal;
+
 
 	//====================================================;
 	
@@ -218,7 +223,7 @@ class Engine
 		if (P_ACTION == BUILD)
 		{
 			info_verb = "Matched & Built";
-			if (P_SOURCE == null) throw "You need to set a `source` directory";
+			if (P_SOURCE == null) throw "You need to set a `source` directory";	
 			if (P_TARGET == null) throw "You need to set a `target` directory";
 			
 		}else
@@ -336,13 +341,15 @@ class Engine
 		arDups = [];
 		arProc = [];
 		arFailRead = [];
+		arMultiRoms = [];
 		arUnmatch = [];
 		arCannotDelete = [];
 		arAlreadyExist = [];
 		arMissing = [];
 		
-		// --
+		// Some static setups
 		Worker.COUNTER = 0;
+		ProgressBar.SYMBOLS = ['█', '░'];
 		
 		if (P_HEADER_SKIP < 0) P_HEADER_SKIP = 0;
 
@@ -354,6 +361,7 @@ class Engine
 			j.MAX_CONCURRENT = Os.cpus().length;
 		}
 		
+		// The Task Generator is going to feed the Job with Tasks, until there are no more arFiles
 		j.addTaskGen(()->{
 			var f = arFiles.shift();
 			if (f == null) return null;
@@ -370,7 +378,7 @@ class Engine
 		var _r = 1 / arFiles.length;
 		var c:Int = 0; // All file counter
 		
-		ProgressBar.SYMBOLS = ['█', '░'];
+		// :: Listen and handle job feedback
 		j.events.on('taskStatus', (a, t)->
 		{
 			if (a == CTaskStatus.complete){
@@ -434,11 +442,10 @@ class Engine
 	/**
 	   Reports running parameters to the terminal / Report File
 	   e.g.
-	   
 	   	- Building SET from (datfile)
-		Source: 'c:\\temp\\'
-		Destination: 'c:\\games\roms\\sms'
-		Flags : RemoveLanguages | CondenseCountries | DeleteSource
+			Source: 'c:\\temp\\'
+			Destination: 'c:\\games\\roms\\sms'
+			Flags : RemoveLanguages | CondenseCountries | DeleteSource
 		
 	**/
 	static function report_pre()
@@ -494,15 +501,15 @@ class Engine
 	**/
 	static function report_post()
 	{
-		// --
-		// Build missing
-		
-		for (k => v in DAT.DB)
+		// Build Missing Roms
+		for (e in DAT.DB)
 		{
-			var ent = prCRC.get(k);
-			if (ent == null)
+			if (prCRC.get(e.roms[0].crc) == null)
 			{
-				arMissing.push(v.romname);
+				for(rom in e.roms)
+				{
+					arMissing.push(rom.filename);
+				}
 			}
 		}
 		
@@ -558,6 +565,14 @@ class Engine
 			rep(arDups,true);
 			rep('');
 		}
+
+		if(arMultiRoms.length>0)
+		{
+			s = print('Scanned files part of multirom entries. (|3|${arMultiRoms.length}|) |1|--Not Processed--|');
+			rep('===== $s');
+			rep(arMultiRoms,true);
+			rep('');
+		}
 		
 		if (arFailRead.length > 0)
 		{
@@ -583,17 +598,23 @@ class Engine
 			rep('');
 		}
 		
-		repSave(); // Note: If it fails, it will exit
-		
+		// - Multirom Warning
+		if(DAT.includesMultiRoms)
+		{
+			rep(print('|1|Note| : The DAT file includes multirom entries. ROMDJ cannot process those entries yet'));
+			rep(print(    '     : [Missing Roms] counter includes multirom files'));
+		}
+
 		if (FLAG_REP)
 		{
 			print('Created a report file with more info: |4|$report_file|');
 		}else{
 			print('Use |4|-report| to produce a detailed report file');
 		}
-		
+
 		print(StringTools.lpad("", '-', LINE));
 		
+		repSave(); // Note: If it fails, it will exit
 	}//---------------------------------------------------;
 		
 	
@@ -773,9 +794,6 @@ class Engine
 
 	/**
 	   Clever Combine two strings. If the joint is a double space, it gets removed
-	   @param	a
-	   @param	b
-	   @return
 	**/
 	static function combineStrings(a:String, b:String):String
 	{
@@ -789,6 +807,9 @@ class Engine
 	
 	/**
 	   -- Fetched from CDCRUSH project
+	   Processes and Sanitizes [XX:N] where N is 0 to 9
+	   e.g. ZIP -> ZIP:4
+	   		zip:10 -> ZIP:9
 	**/
 	static function parseCodecTuple(S:String, M:Array<String>):String
 	{
@@ -828,7 +849,7 @@ class Engine
 	// Process the <COMPRESSION> parameter and return according extension
 	public static function getCompressionExt():String
 	{
-		if (COMPRESSION == null) return DAT.EXT;
+		if (COMPRESSION == null) return "";
 		return switch(Engine.COMPRESSION[0]) {
 			case "ZIP": '.zip';
 			case "7Z":  '.7z';

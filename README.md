@@ -4,7 +4,7 @@
 **Author:** John Dimi :computer:, <johndimi@outlook (.) com> *twitter*: [@jondmt](https://twitter.com/jondmt)  
 **Project Page and Sources:** [https://github.com/johndimi/romdj](https://github.com/johndimi/romdj)  
 **Language:** HAXE compiled to Node.js  
-**Version:** 0.3.1 **Platform:** Windows Terminal  
+**Version:** 0.3.2 **Platform:** Windows Terminal  
 
 
 ## :mega: What is it

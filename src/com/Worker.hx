@@ -1,27 +1,20 @@
 package com;
-import djNode.tools.ArrayExecSync;
+import djNode.app.SevenZip;
 import djNode.tools.FileTool;
 import djNode.utils.ISendingProgress;
 import com.DatFile.DatEntry;
-import js.Error;
-import js.Node;
+import js.lib.Error;
 import js.node.Fs;
-import js.node.ChildProcess;
 import js.node.Path;
-import js.node.Require;
-import js.node.Stream;
 import js.node.fs.WriteStream;
 import js.node.stream.Readable;
-import js.node.stream.Writable.IWritable;
 
-// Helper
-import Engine.print as print;
 import djNode.tools.LOG.log as log;
 import Engine.EngineAction;
 
 /**
  * Checks One ROM
- * - Runs from inside a Task
+ * - Runs from inside a CTask
  */
 class Worker implements ISendingProgress
 {
@@ -37,19 +30,23 @@ class Worker implements ISendingProgress
 	var src:String;						// Original file to be processed, could be archive or raw
 	var subFiles:Array<String> = null;	// If <archive>, hold all the files inside the ARC
 	
-	var romsTotal:Int;					// How many roms SRC contains
+	var romsTotal:Int;					// How many roms source contains (1 for raw or number of files in archive)
 	var romsMatched:Int;				// How many of those roms were matched to the DAT
 	
 	var no:Int;							// # of src item in list
 	
 	var action_match:(DatEntry, ?String, Void->Void)->Void;
 	
-	// Was forcekill called?
+	// Was forcekill called? Useful to know when coming back from callbacks
 	var _forceKill:Bool = false;
-	
+
+	// True when this rom belongs to an Entry with multiple roms
+	var isMultiRom:Bool = false;
+
 	public static var COUNTER:Int = 0;
 	
-	// --
+	//---------------------------------------------------;
+
 	public function new(Source:String) 
 	{
 		COUNTER++;
@@ -63,7 +60,6 @@ class Worker implements ISendingProgress
 		}
 		
 		romsMatched = 0;
-		//shortname = Path.basename(src);
 		shortname = Path.relative(Engine.P_SOURCE, src);
 	}//---------------------------------------------------;
 
@@ -109,12 +105,14 @@ class Worker implements ISendingProgress
 
 		// --
 		// When working with zip files, store the current path of inner files, I need it
-		var last_subFile:String;
+		var last_subFile:String = null;
 
 		// getStream() is a generator and everytime it is called it returns
 		// the next file to process (in stream mode), if no more files returns null
 		var getStream:Void->IReadable;
 		
+		// >> Setup getstream() :
+
 		if (Engine.fileIsArchive(src))
 		{
 			var S = new SevenZip();
@@ -155,7 +153,7 @@ class Worker implements ISendingProgress
 		}
 		
 		// --
-		// Process the next file by reading the generator, and getting an entry
+		// Process the next file by reading the generator, and getting a ROM
 		var doNext:Void->Void;
 		doNext = ()-> 
 		{
@@ -163,11 +161,18 @@ class Worker implements ISendingProgress
 			if (rs == null) return opComplete(); // No more files to process
 			var S = new SevenZip();
 				S.onFail = onFail;
-			// Dev: I don't care where or how, as long as it is a stream I need to process it
 			var ws = S.getHashPipe("CRC32", (hash)->{
 				if (_forceKill) return;
-				var entry = Engine.DAT.DB.get(hash);
-				if (entry != null) {					
+				var ind = Engine.DAT.ROMHASH.get(hash);
+				// RomFile CRC Found in the DAT::
+				if (ind != null) 
+				{
+					var entry = Engine.DAT.DB[ind];
+					if(entry.roms.length>1){
+						_handleMultiRomEntry(entry, last_subFile);
+						return opComplete();	// Exit now, don't process anymore files (if in archive)
+					}
+					
 					romsMatched++;
 					action_match(entry, last_subFile, doNext);
 				}else{
@@ -187,7 +192,7 @@ class Worker implements ISendingProgress
 	/**
 	   Process [raw file] or [file inside archive] for BUILD operation
 	   - If a file cannot be created, then the whole JOB will FAIL
-	   
+	   - Assumes one rom per entry
 	**/
 	function action_build(e:DatEntry, ?arcPath:String, end:Void->Void)
 	{
@@ -198,12 +203,16 @@ class Worker implements ISendingProgress
 		}
 		
 		var name_fixed = Engine.apply_NameFilters(e.name);
-		var romFilename = name_fixed + Engine.DAT.EXT;
-		var targetFile = '${Engine.P_TARGET}/${name_fixed}'; // NO EXT YET
+		var rom_ext = Path.extname(e.roms[0].filename).toLowerCase();
+		var romFilename = name_fixed + rom_ext;
+		var targetFile = '${Engine.P_TARGET}/${name_fixed}'; // No Extension yet, (archive or raw)
 		
-			
-		// - Get target file and check if it exists
-		targetFile += Engine.getCompressionExt();
+		
+		if(Engine.COMPRESSION!=null) 
+			targetFile += Engine.getCompressionExt();
+		else
+			targetFile += rom_ext;
+
 		
 		if (Fs.existsSync(targetFile) && !Engine.FLAG_OVERWRITE) {
 			arReport(Engine.arAlreadyExist, e.name, arcPath);
@@ -235,7 +244,7 @@ class Worker implements ISendingProgress
 				_ws = null;
 			}
 			
-			// I am deleting the target file as it may be incomplete
+			// I am deleting the target file, flag_overwrite was checked earlier
 			try{
 				Fs.unlinkSync(targetFile);
 				log('Deleted $targetFile');
@@ -297,7 +306,7 @@ class Worker implements ISendingProgress
 
 	/**
 	   Process [raw file] or [file inside archive] for SCAN operation
-	   DEV: Scan cannot fail
+	   - Assumes one rom per entry
 	**/
 	function action_scan(e:DatEntry, ?arcPath:String, end:Void->Void)
 	{
@@ -312,8 +321,22 @@ class Worker implements ISendingProgress
 		end();
 	}//---------------------------------------------------;
 	
+
+
+	/**
+		Currently, do not process any multirom entries,
+		Log and Warn the user
+	**/
+	function _handleMultiRomEntry(e:DatEntry,?arcPath:String)
+	{
+		arReport(Engine.arMultiRoms, e.name, arcPath);
+	}//---------------------------------------------------;
+
+
 	
-	
+	/**
+		Log info on a matched filename
+	**/
 	function log_match(e:DatEntry, ?ap:String)
 	{
 		if (ap != null) {
@@ -324,27 +347,27 @@ class Worker implements ISendingProgress
 	}//---------------------------------------------------;
 	
 	
-	
 	/**
-	   Check if file was already processed in current run
-	   @param	e
-	   @param	arcPath
-	   @return
+	   Check if Entry was already processed in current run
+	   - Assumes one rom per entry
 	**/
 	function checkDup(e:DatEntry, ?arcPath:String):Bool
 	{
-		if (Engine.prCRC.exists(e.crc))
+		if (Engine.prCRC.exists(e.roms[0].crc))
 		{
 			log('${padL1}Duplicate Entry "${e.name}" skipping.');
 			arReport(Engine.arDups, e.name, arcPath);
 			return true;
 		}else{
-			Engine.prCRC.set(e.crc, true);
+			Engine.prCRC.set(e.roms[0].crc, true);
 			return false;
 		}
 	}//---------------------------------------------------;
 
 	
+	/**
+		Quickly push info in an log array
+	**/
 	function arReport(ar:Array<String>, n:String, p:String)
 	{
 		if (p == null){

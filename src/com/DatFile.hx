@@ -1,17 +1,19 @@
 package com;
-import haxe.zip.Entry;
-import js.Error;
+import js.lib.Error;
 import js.node.Fs;
 import haxe.xml.Access;
 import js.node.Path;
 import djNode.tools.LOG;
 
 
-// Current version supports only one rom file per entry
 typedef DatEntry = {
 	name:String,
 	description:String,
-	romname:String,
+	roms:Array<DatRom>
+}
+
+typedef DatRom = {
+	filename:String,	// name XML
 	md5:String,
 	crc:String,
 	size:Int,
@@ -29,26 +31,30 @@ typedef DatEntry = {
 class DatFile 
 {
 	/**
-	   name,description,version,author,homepage,url 
-	**/
+		XML header infos
+		name,description,version,author,homepage,url,etc **/
 	public var HEADER:Map<String,String>;
-	
-	/**
-	   CRC32 => Entry
-	   DEV: I am using CRC32 for lookups for quick lookup based on it **/
-	public var DB:Map<String,DatEntry>;
 	
 	/** Number of entries */
 	public var count:Int = 0;
 	
-	/** Guessed Romset Extension (lowercase) e.g `.sms` , `.gb` */
+	/** Guessed Romset Extension
+	    Not reliable, since it is the first element rom extension */
 	public var EXT:String; 
 	
 	// The path of the DAT file loaded
 	public var fileLoaded:String = "";
 	
-	// Object and Header info
+	// LOG/TEXT Object and Header infos
 	public var info:Array<String>;
+
+	/** Map rom CRC -> DB Index**/
+	public var ROMHASH:Map<String,Int>;
+
+	/** Store all entries serially**/
+	public var DB:Array<DatEntry>;
+
+	public var includesMultiRoms(default,null):Bool;
 
 	//====================================================;
 	
@@ -66,20 +72,21 @@ class DatFile
 	{
 		reset();
 		fileLoaded = file;
-		
-		var con:String = try Fs.readFileSync(file, {encoding:'utf8'}) catch (e:Dynamic) throw 'Cannot read file `$file`';
-		
-		try{
-			
-		var ac = try new Access(Xml.parse(con).firstElement());
 
-		var n_header = ac.node.resolve('header');
-		ac.x.removeChild(n_header.x);
-		
+		var con:String = try Fs.readFileSync(file, {encoding:'utf8'}) catch (e:Dynamic) throw 'Cannot read file `$file`';
+
 		info.push('== DatFile Object');
 		info.push('> Loaded File : $file');
 		info.push('> HEADER : ');
 		
+		try{
+			
+		var ac = try new Access(Xml.parse(con).firstElement());
+		
+		var n_header = ac.node.resolve('header');
+		ac.x.removeChild(n_header.x); // Remove it so I can traverse through the rest of the elements in a for loop
+
+		// Parse the <header> first
 		for (i in n_header.elements) {
 			try{
 				HEADER[i.name] = i.innerData;
@@ -87,29 +94,40 @@ class DatFile
 			}catch (e:Dynamic){ }
 		}
 		
+		// Then the rest of the elements, which should all be <game> tags
 		for (i in ac.elements) 
 		{
-			count++;
-			var _d = i.node.description;	// Alternative to `i.node.resolve('description');`
-			var _r = i.nodes.rom;
-			
-			if (_r.length > 1)
-			{
-				throw 'DAT File Error, Multiple Roms per Entry, is NOT SUPPORTED yet';
-			}			
-			
-			var rom = _r[0];
-			
-			var f:DatEntry = {
+			var e:DatEntry = {
 				name:i.att.name,
-				description:_d.innerData,
-				romname:rom.att.name,
-				md5:rom.att.md5,
-				crc:rom.att.crc,
-				size:Std.parseInt(rom.att.size),
-				status:rom.x.exists('status')?rom.att.status:"-"
+				description:i.node.description.innerData,
+				roms:[]
 			};
-			DB.set(f.crc, f);
+
+			for(rom in i.nodes.rom)
+			{
+				var r:DatRom = {
+					filename:rom.att.name,
+					md5:rom.att.md5,
+					crc:rom.att.crc,
+					size:Std.parseInt(rom.att.size),
+					status:rom.x.exists('status')?rom.att.status:"-"
+				};
+
+				e.roms.push(r);
+				ROMHASH.set(r.crc,count); // hash -> DB index
+			}
+
+			if(e.roms.length==0)
+			{
+				LOG.log('WARNING: Entry "${e.name}" contains no roms.');
+			}else
+			if(e.roms.length>1)
+			{
+				includesMultiRoms = true;
+			}
+			
+			DB.push(e);
+			count++;
 		}
 		
 		if (count == 0)
@@ -120,7 +138,8 @@ class DatFile
 		// -
 		for (i in DB) 
 		{
-			EXT = Path.extname(i.romname).toLowerCase();
+			// DEV: WARNING: Assumes first element has roms!
+			EXT = Path.extname(i.roms[0].filename).toLowerCase();
 			break;
 		}
 		
@@ -136,7 +155,7 @@ class DatFile
 			LOG.log(e);
 			throw e;
 		}
-		
+
 		for (i in info)
 		{
 			LOG.log(i);
@@ -148,9 +167,11 @@ class DatFile
 		HEADER = [];
 		info = [];
 		DB = [];
+		ROMHASH = [];
 		count = 0;
 		fileLoaded = "";
 		EXT = "";
+		includesMultiRoms = false;
 	}//---------------------------------------------------;
 	
 }// --

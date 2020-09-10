@@ -28,9 +28,7 @@
   </build>
   <!-- haxelib libraries -->
   <haxelib>
-    <library name="hxnodejs" />
-    <library name="djNode:0.4.0" />
-    <library name="jstack" />
+    <library name="djNode:0.5.0" />
   </haxelib>
   <!-- Class files to compile (other referenced classes will automatically be included) -->
   <compileTargets>

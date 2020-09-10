@@ -29,8 +29,11 @@ class StreamHeaderCut<T:Transform<T>> extends js.node.stream.Transform<T>
 		super(null);
 	}//---------------------------------------------------;
 	
-	override function _transform(chunk:Buffer, encoding:String, callback:js.lib.Error->EitherType<String, Buffer>->Void):Void 
+	//override function _transform(chunk:Buffer, encoding:String, callback:js.lib.Error->EitherType<String, Buffer>->Void):Void 
+	override function _transform(chunk2:Dynamic, encoding:String, callback:(error:Null<Error>, data:Dynamic) -> Void):Void 
 	{
+		var chunk:Buffer = cast chunk2;
+		
 		if (!done)
 		{
 			if (chunk.byteLength > (len - skipped))

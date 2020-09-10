@@ -154,7 +154,7 @@ class Worker implements ISendingProgress
 		
 		// --
 		// Process the next file by reading the generator, and getting a ROM
-		var doNext:Void->Void;
+		var doNext:Void->Void = null;
 		doNext = ()-> 
 		{
 			var rs = getStream();
@@ -226,7 +226,7 @@ class Worker implements ISendingProgress
 		var S = new SevenZip();
 			S.onFail = onFail;
 			
-		var _ws:WriteStream;
+		var _ws:WriteStream = null;
 	
 		// --
 		var endOK = function(){

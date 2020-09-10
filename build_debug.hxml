@@ -2,7 +2,7 @@
 
 -lib hxnodejs
 -lib djNode
--lib jstack
+# -lib jstack
 -cp src/
 -main Main
 -js bin/app.js

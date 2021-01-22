@@ -23,7 +23,7 @@ class Main extends BaseApp
 		PROGRAM_INFO = {
 			executable:'romdj',
 			name:"romdj - Emulation Romset Builder",
-			info:"https://github.com/johndimi/romdj",
+			info:"https://github.com/john32b/romdj",
 			version :Engine.VERSION
 		};
 		

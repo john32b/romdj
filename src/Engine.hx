@@ -50,7 +50,7 @@ class Engine
 	static final rep_head = [
 		'== romdj ' + VERSION,
 		' - Emulation Romset Builder',
-		' - https://github.com/johndimi/romdj',
+		' - https://github.com/john32b/romdj',
 		' ------------------------------------'
 	];
 	

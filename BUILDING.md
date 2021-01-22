@@ -12,7 +12,7 @@ https://github.com/HaxeFoundation/hxnodejs
 `haxelib install hxnodejs`
 
 - djNode 0.5.0 (*library*)  
-https://github.com/johndimi/djNode/releases/tag/v0.5  
+https://github.com/john32b/djNode/releases/tag/v0.5  
 Download the source zip and then  
 `haxelib install djNode-0.5.zip`
 

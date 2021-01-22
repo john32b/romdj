@@ -5,10 +5,10 @@
   "keywords": [
     "emulation","rom","no-intro"
   ],
-  "homepage": "https://github.com/johndimi/romdj",
-  "version": "0.3.2",
+  "homepage": "https://github.com/john32b/romdj",
+  "version": "0.3.3",
   "author": {
-    "name": "John Dimi",
+    "name": "John32B",
     "email": "johndimi@outlook.com"
   },
   "engines": {
@@ -34,7 +34,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/johndimi/romdj"
+    "url": "https://github.com/john32b/romdj"
   },
   "dependencies": {}
 }
